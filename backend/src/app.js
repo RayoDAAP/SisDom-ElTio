@@ -12,8 +12,12 @@ const app = express();
 
 // ─── Middlewares Globales ────────────────────────────────────────────────────
 
+const allowedOrigins = process.env.CLIENT_URL
+  ? [process.env.CLIENT_URL, 'http://localhost:5173']
+  : '*';
+
 app.use(cors({
-  origin: 'http://localhost:5173', // Frontend Vite
+  origin: allowedOrigins,
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
