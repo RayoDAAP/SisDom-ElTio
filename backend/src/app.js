@@ -27,6 +27,15 @@ app.use(express.urlencoded({ extended: true }));
 
 // ─── Rutas ───────────────────────────────────────────────────────────────────
 
+// Ruta raíz de bienvenida (evita respuesta 404 al abrir la URL base del backend)
+app.get('/', (_req, res) => {
+  res.json({
+    success: true,
+    message: 'API de Tacos El Tío funcionando correctamente 🌮',
+    healthCheck: '/api/health',
+  });
+});
+
 app.get('/api/health', (_req, res) => {
   res.json({ success: true, message: 'API de Tacos El Tío funcionando correctamente 🌮' });
 });
