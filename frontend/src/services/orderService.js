@@ -4,8 +4,12 @@
  */
 import axios from 'axios';
 
-const rawUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-const API_BASE_URL = rawUrl.replace(/\/+$/, '');
+// Normalizar VITE_API_URL para asegurar que siempre incluya el prefijo /api
+let rawUrl = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api').trim().replace(/\/+$/, '');
+if (!rawUrl.endsWith('/api')) {
+  rawUrl += '/api';
+}
+const API_BASE_URL = rawUrl;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
