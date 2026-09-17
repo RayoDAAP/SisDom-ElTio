@@ -1,9 +1,10 @@
 /**
  * @module AppRouter
  * @description Define todas las rutas de la aplicación con protección por autenticación y rol.
- *              Usa React Router v6 con rutas anidadas y guardas de acceso.
+ *              Usa HashRouter para compatibilidad universal en servidores estáticos (Render, Vercel, GitHub Pages)
+ *              evitando errores 404 al recargar la página.
  */
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import useAuth from '../hooks/useAuth';
 import LoginPage from '../pages/LoginPage';
 import AdminDashboard from '../pages/AdminDashboard';
@@ -12,7 +13,6 @@ import { USER_ROLES } from '../models/user.model';
 
 /**
  * Ruta protegida — redirige a /login si no está autenticado.
- * @param {{ children: React.ReactNode }} props
  */
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -25,7 +25,6 @@ const ProtectedRoute = ({ children }) => {
 
 /**
  * Ruta protegida con restricción por rol.
- * @param {{ children: React.ReactNode, role: string }} props
  */
 const RoleRoute = ({ children, role }) => {
   const { user, isLoading } = useAuth();
@@ -33,7 +32,6 @@ const RoleRoute = ({ children, role }) => {
   if (isLoading) return <div className="loading-screen">Cargando...</div>;
   if (!user) return <Navigate to="/login" replace />;
   if (user.role !== role) {
-    // Redirige al dashboard correcto si tiene otro rol
     return <Navigate to={user.role === USER_ROLES.ADMIN ? '/admin' : '/dashboard'} replace />;
   }
 
@@ -42,7 +40,6 @@ const RoleRoute = ({ children, role }) => {
 
 /**
  * Ruta pública — redirige al dashboard si ya está autenticado.
- * @param {{ children: React.ReactNode }} props
  */
 const PublicRoute = ({ children }) => {
   const { isAuthenticated, user, isLoading } = useAuth();
@@ -56,12 +53,10 @@ const PublicRoute = ({ children }) => {
 };
 
 const AppRouter = () => (
-  <BrowserRouter>
+  <HashRouter>
     <Routes>
-      {/* Ruta raíz — redirige según estado */}
       <Route path="/" element={<Navigate to="/login" replace />} />
 
-      {/* Ruta pública */}
       <Route
         path="/login"
         element={
@@ -71,7 +66,6 @@ const AppRouter = () => (
         }
       />
 
-      {/* Dashboard de administrador */}
       <Route
         path="/admin"
         element={
@@ -83,7 +77,6 @@ const AppRouter = () => (
         }
       />
 
-      {/* Dashboard de usuario */}
       <Route
         path="/dashboard"
         element={
@@ -95,10 +88,9 @@ const AppRouter = () => (
         }
       />
 
-      {/* Ruta no encontrada */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
-  </BrowserRouter>
+  </HashRouter>
 );
 
 export default AppRouter;
