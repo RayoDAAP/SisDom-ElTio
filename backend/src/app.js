@@ -1,11 +1,11 @@
 /**
  * @module app
  * @description Configura la aplicación Express: middlewares globales, rutas y manejo de errores.
- *              Separado de server.js para facilitar pruebas unitarias.
  */
 import express from 'express';
 import cors from 'cors';
 import authRoutes from './routes/authRoutes.js';
+import orderRoutes from './routes/orderRoutes.js';
 import { sendError } from './utils/responseHelper.js';
 
 const app = express();
@@ -18,7 +18,7 @@ const allowedOrigins = process.env.CLIENT_URL
 
 app.use(cors({
   origin: allowedOrigins,
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
@@ -32,6 +32,7 @@ app.get('/api/health', (_req, res) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api/orders', orderRoutes);
 
 // ─── Ruta no encontrada ──────────────────────────────────────────────────────
 
