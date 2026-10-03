@@ -24,11 +24,19 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-export const loginRequest = async (email, password) => {
-  const response = await api.post('/auth/login', { email, password });
+/**
+ * Inicia sesión mediante nombre de usuario y contraseña.
+ * @param {string} username
+ * @param {string} password
+ */
+export const loginRequest = async (username, password) => {
+  const response = await api.post('/auth/login', { username, password });
   return response.data.data;
 };
 
+/**
+ * Obtiene los datos del usuario autenticado actual.
+ */
 export const getMeRequest = async () => {
   const response = await api.get('/auth/me');
   return response.data.data.user;

@@ -44,14 +44,14 @@ export const AuthProvider = ({ children }) => {
 
   /**
    * Autentica al usuario y persiste el token.
-   * @param {string} email
+   * @param {string} username
    * @param {string} password
    */
-  const login = useCallback(async (email, password) => {
+  const login = useCallback(async (username, password) => {
     setAuthError(null);
     setIsLoading(true);
     try {
-      const { token, user: userData } = await loginRequest(email, password);
+      const { token, user: userData } = await loginRequest(username, password);
       localStorage.setItem('token', token);
       setUser(userData);
     } catch (error) {

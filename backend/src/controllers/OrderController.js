@@ -11,7 +11,7 @@ import { sendSuccess, sendError } from '../utils/responseHelper.js';
 export const getOrders = (req, res) => {
   try {
     const range = req.query.range || 'all';
-    const orders = OrderService.getOrders(range);
+    const orders = OrderService.getOrders(range, req.user);
     return sendSuccess(res, 200, 'Lista de pedidos obtenida', { orders });
   } catch (error) {
     return sendError(res, 500, error.message);

@@ -8,8 +8,10 @@
  * @typedef {Object} User
  * @property {number} id       - Identificador único
  * @property {string} name     - Nombre completo
+ * @property {string} username - Nombre de usuario para login
  * @property {string} email    - Correo electrónico
- * @property {string} role     - Rol del usuario ('admin' | 'user')
+ * @property {string} role     - Rol ('admin' | 'auxiliar' | 'repartidor')
+ * @property {boolean} isActive - Si la cuenta está activa
  */
 
 /**
@@ -21,7 +23,9 @@
 /** @enum {string} */
 export const USER_ROLES = {
   ADMIN: 'admin',
-  USER: 'user',
+  AUXILIAR: 'auxiliar',
+  REPARTIDOR: 'repartidor',
+  USER: 'auxiliar', // Alias para compatibilidad
 };
 
 /**
@@ -32,7 +36,9 @@ export const USER_ROLES = {
 export const createUser = (overrides = {}) => ({
   id: null,
   name: '',
+  username: '',
   email: '',
-  role: USER_ROLES.USER,
+  role: USER_ROLES.AUXILIAR,
+  isActive: true,
   ...overrides,
 });

@@ -9,7 +9,17 @@ import useAuth from '../hooks/useAuth';
 import LoginPage from '../pages/LoginPage';
 import AdminDashboard from '../pages/AdminDashboard';
 import UserDashboard from '../pages/UserDashboard';
+import RepartidorView from '../pages/RepartidorView';
 import { USER_ROLES } from '../models/user.model';
+
+/**
+ * Determina la ruta por defecto según el rol del usuario.
+ */
+const getDefaultRouteForRole = (role) => {
+  if (role === USER_ROLES.ADMIN) return '/admin';
+  if (role === USER_ROLES.REPARTIDOR) return '/repartidor';
+  return '/dashboard'; // Auxiliar / Trabajador
+};
 
 /**
  * Ruta protegida — redirige a /login si no está autenticado.
@@ -17,36 +27,56 @@ import { USER_ROLES } from '../models/user.model';
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
 
-  if (isLoading) return <div className="loading-screen">Cargando...</div>;
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 text-sm">
+        Cargando sistema...
+      </div>
+    );
+  }
   if (!isAuthenticated) return <Navigate to="/login" replace />;
 
   return children;
 };
 
 /**
- * Ruta protegida con restricción por rol.
+ * Ruta protegida con restricción por rol específico.
  */
-const RoleRoute = ({ children, role }) => {
+const RoleRoute = ({ children, allowedRoles }) => {
   const { user, isLoading } = useAuth();
 
-  if (isLoading) return <div className="loading-screen">Cargando...</div>;
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 text-sm">
+        Cargando sistema...
+      </div>
+    );
+  }
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role !== role) {
-    return <Navigate to={user.role === USER_ROLES.ADMIN ? '/admin' : '/dashboard'} replace />;
+
+  const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
+  if (!roles.includes(user.role)) {
+    return <Navigate to={getDefaultRouteForRole(user.role)} replace />;
   }
 
   return children;
 };
 
 /**
- * Ruta pública — redirige al dashboard si ya está autenticado.
+ * Ruta pública — redirige al dashboard del rol correspondiente si ya está autenticado.
  */
 const PublicRoute = ({ children }) => {
   const { isAuthenticated, user, isLoading } = useAuth();
 
-  if (isLoading) return <div className="loading-screen">Cargando...</div>;
-  if (isAuthenticated) {
-    return <Navigate to={user?.role === USER_ROLES.ADMIN ? '/admin' : '/dashboard'} replace />;
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 text-sm">
+        Cargando sistema...
+      </div>
+    );
+  }
+  if (isAuthenticated && user) {
+    return <Navigate to={getDefaultRouteForRole(user.role)} replace />;
   }
 
   return children;
@@ -70,7 +100,7 @@ const AppRouter = () => (
         path="/admin"
         element={
           <ProtectedRoute>
-            <RoleRoute role={USER_ROLES.ADMIN}>
+            <RoleRoute allowedRoles={[USER_ROLES.ADMIN]}>
               <AdminDashboard />
             </RoleRoute>
           </ProtectedRoute>
@@ -81,8 +111,19 @@ const AppRouter = () => (
         path="/dashboard"
         element={
           <ProtectedRoute>
-            <RoleRoute role={USER_ROLES.USER}>
+            <RoleRoute allowedRoles={[USER_ROLES.AUXILIAR, 'user']}>
               <UserDashboard />
+            </RoleRoute>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/repartidor"
+        element={
+          <ProtectedRoute>
+            <RoleRoute allowedRoles={[USER_ROLES.REPARTIDOR]}>
+              <RepartidorView />
             </RoleRoute>
           </ProtectedRoute>
         }

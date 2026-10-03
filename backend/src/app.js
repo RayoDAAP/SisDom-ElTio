@@ -7,6 +7,7 @@ import cors from 'cors';
 import authRoutes from './routes/authRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 import clientRoutes from './routes/clientRoutes.js';
+import userRoutes from './routes/userRoutes.js';
 import { sendError } from './utils/responseHelper.js';
 
 const app = express();
@@ -42,6 +43,7 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api', clientRoutes);
 
 // ─── Ruta no encontrada ──────────────────────────────────────────────────────

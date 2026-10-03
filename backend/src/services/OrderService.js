@@ -1,6 +1,8 @@
 /**
  * @module OrderService
  * @description Servicio con la lógica de negocio para pedidos.
+ *              Incluye soporte para métodos de pago (Efectivo/Transferencia),
+ *              ítems de tacos/gorditas/tostadas y filtrado por rol (Auxiliar solo ve órdenes de su turno/día).
  */
 import { orderStore, ORDER_STATUS } from '../models/Order.js';
 import { registerClientAndColonia } from './ClientService.js';
@@ -8,27 +10,30 @@ import { registerClientAndColonia } from './ClientService.js';
 let orderCounter = 1004;
 
 /**
- * Obtiene todos los pedidos con opción de filtrado por período.
+ * Obtiene los pedidos con opción de filtrado por período y rol del usuario solicitante.
+ * Si el usuario es Auxiliar, solo tiene visibilidad de las órdenes del día de hoy.
+ *
  * @param {'day' | 'week' | 'month' | 'all'} range
+ * @param {object} requestingUser
  * @returns {Array} Lista de pedidos filtrada y ordenada por fecha descendente
  */
-export const getOrders = (range = 'all') => {
+export const getOrders = (range = 'all', requestingUser = null) => {
   const now = new Date();
-  
-  const filtered = orderStore.filter((order) => {
-    if (range === 'all') return true;
+  const isAuxiliar = requestingUser?.role === 'auxiliar' || requestingUser?.role === 'user';
+  const effectiveRange = isAuxiliar ? 'day' : range;
 
+  const filtered = orderStore.filter((order) => {
     const orderDate = new Date(order.createdAt);
     const diffTime = Math.abs(now - orderDate);
     const diffDays = diffTime / (1000 * 60 * 60 * 24);
 
-    if (range === 'day') {
+    if (effectiveRange === 'day') {
       return orderDate.toDateString() === now.toDateString();
     }
-    if (range === 'week') {
+    if (effectiveRange === 'week') {
       return diffDays <= 7;
     }
-    if (range === 'month') {
+    if (effectiveRange === 'month') {
       return (
         orderDate.getMonth() === now.getMonth() &&
         orderDate.getFullYear() === now.getFullYear()
@@ -59,7 +64,7 @@ export const createOrder = (orderData, createdByName) => {
     id: `PED-${orderCounter++}`,
     createdAt: new Date().toISOString(),
     status: ORDER_STATUS.PENDING,
-    createdBy: createdByName || 'Trabajador',
+    createdBy: createdByName || 'Auxiliar de Pedidos',
     ...orderData,
   };
 

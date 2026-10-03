@@ -1,45 +1,47 @@
 /**
  * @module AuthService
- * @description Contiene la lógica de negocio de autenticación.
- *              Desacoplado del controlador para facilitar pruebas y mantenimiento.
+ * @description Lógica de negocio de autenticación con JWT y bcrypt.
+ *              Soporta inicio de sesión mediante nombre de usuario y verificación de estado activo.
  */
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import env from '../config/env.js';
-import { userStore, toPublicUser } from '../models/User.js';
-
-/**
- * Busca un usuario por email en el store.
- * @param {string} email
- * @returns {import('../models/User.js').User | undefined}
- */
-const findUserByEmail = (email) =>
-  userStore.find((u) => u.email.toLowerCase() === email.toLowerCase());
+import { findUserByUsername, toPublicUser } from '../models/User.js';
 
 /**
  * Genera un JSON Web Token firmado para el usuario dado.
- * @param {import('../models/User.js').User} user
+ * @param {object} user
  * @returns {string} JWT
  */
 const generateToken = (user) =>
   jwt.sign(
-    { id: user.id, email: user.email, role: user.role },
+    {
+      id: user.id,
+      username: user.username,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    },
     env.JWT_SECRET,
     { expiresIn: env.JWT_EXPIRES_IN }
   );
 
 /**
- * Autentica un usuario con email y contraseña.
- * @param {string} email
+ * Autentica un usuario con nombre de usuario (o email) y contraseña.
+ * Valida también que la cuenta esté activa.
+ * @param {string} usernameOrEmail
  * @param {string} password
  * @returns {Promise<{ token: string, user: object }>}
- * @throws {Error} Si las credenciales son inválidas
  */
-export const login = async (email, password) => {
-  const user = findUserByEmail(email);
+export const login = async (usernameOrEmail, password) => {
+  const user = findUserByUsername(usernameOrEmail);
 
   if (!user) {
     throw new Error('Credenciales inválidas');
+  }
+
+  if (user.isActive === false) {
+    throw new Error('Esta cuenta ha sido desactivada. Contacte al administrador.');
   }
 
   const isPasswordValid = await bcrypt.compare(password, user.password);
@@ -55,6 +57,5 @@ export const login = async (email, password) => {
  * Verifica y decodifica un JWT.
  * @param {string} token
  * @returns {object} Payload decodificado
- * @throws {Error} Si el token es inválido o expiró
  */
 export const verifyToken = (token) => jwt.verify(token, env.JWT_SECRET);

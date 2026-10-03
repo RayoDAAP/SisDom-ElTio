@@ -3,7 +3,7 @@
  * @description Vista del formulario de autenticación para el portal de trabajadores.
  *              Utiliza componentes modularizados, Tailwind CSS e iconos de Lucide React.
  */
-import { Mail, Lock, LogIn, AlertCircle } from 'lucide-react';
+import { User, Lock, LogIn, AlertCircle } from 'lucide-react';
 import Logo from '../components/common/Logo';
 import Input from '../components/common/Input';
 import Button from '../components/common/Button';
@@ -20,10 +20,10 @@ const LoginPage = () => {
         <div className="flex flex-col items-center mb-8">
           <Logo size="md" />
           <h1 className="mt-6 text-xl font-bold text-slate-900 tracking-tight">
-            Portal de Trabajadores
+            Portal de Acceso
           </h1>
           <p className="text-xs text-slate-500 mt-1 text-center">
-            Inicia sesión para gestionar pedidos y entregas
+            Inicia sesión con tu nombre de usuario para gestionar pedidos
           </p>
         </div>
 
@@ -41,15 +41,15 @@ const LoginPage = () => {
         {/* Formulario de Inicio de Sesión */}
         <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
           <Input
-            id="login-email"
-            name="email"
-            label="Correo electrónico"
-            type="email"
-            value={formData.email}
+            id="login-username"
+            name="username"
+            label="Nombre de usuario"
+            type="text"
+            value={formData.username}
             onChange={handleChange}
-            placeholder="correo@ejemplo.com"
-            autoComplete="email"
-            icon={Mail}
+            placeholder="admin, auxiliar o repartidor"
+            autoComplete="username"
+            icon={User}
             required
           />
 
@@ -78,6 +78,13 @@ const LoginPage = () => {
             <span>Iniciar sesión</span>
           </Button>
         </form>
+
+        {/* Información de Cuentas del Sistema */}
+        <div className="mt-6 pt-5 border-t border-slate-100 text-center">
+          <p className="text-[11px] text-slate-400">
+            Roles disponibles: Administrador, Auxiliar de Pedidos y Repartidor
+          </p>
+        </div>
       </div>
     </main>
   );

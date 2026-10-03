@@ -13,7 +13,7 @@ import { USER_ROLES } from '../models/user.model';
  * Separa la lógica de negocio de la vista.
  *
  * @returns {{
- *   formData: { email: string, password: string },
+ *   formData: { username: string, password: string },
  *   isSubmitting: boolean,
  *   errorMessage: string,
  *   handleChange: (e: React.ChangeEvent<HTMLInputElement>) => void,
@@ -24,7 +24,7 @@ const useLoginController = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const [formData, setFormData] = useState({ email: '', password: '' });
+  const [formData, setFormData] = useState({ username: '', password: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -40,14 +40,19 @@ const useLoginController = () => {
     setErrorMessage('');
 
     try {
-      await login(formData.email, formData.password);
+      await login(formData.username, formData.password);
 
-      // Leer el usuario del contexto después del login es asíncrono,
-      // así que resolvemos la redirección leyendo el token decodificado localmente.
+      // Resolver redirección leyendo el token decodificado
       const token = localStorage.getItem('token');
       if (token) {
         const payload = JSON.parse(atob(token.split('.')[1]));
-        navigate(payload.role === USER_ROLES.ADMIN ? '/admin' : '/dashboard');
+        if (payload.role === USER_ROLES.ADMIN) {
+          navigate('/admin');
+        } else if (payload.role === USER_ROLES.REPARTIDOR) {
+          navigate('/repartidor');
+        } else {
+          navigate('/dashboard');
+        }
       }
     } catch (error) {
       setErrorMessage(error.message);

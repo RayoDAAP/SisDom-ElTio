@@ -8,20 +8,21 @@ import { sendSuccess, sendError } from '../utils/responseHelper.js';
 
 /**
  * POST /api/auth/login
- * Autentica un usuario y retorna un JWT con datos del usuario.
+ * Autentica un usuario por username (o email) y retorna un JWT.
  *
  * @param {import('express').Request}  req
  * @param {import('express').Response} res
  */
 export const login = async (req, res) => {
-  const { email, password } = req.body;
+  const { username, email, password } = req.body;
+  const identifier = username || email;
 
-  if (!email || !password) {
-    return sendError(res, 400, 'El email y la contraseña son requeridos');
+  if (!identifier || !password) {
+    return sendError(res, 400, 'El nombre de usuario y la contraseña son requeridos');
   }
 
   try {
-    const result = await AuthService.login(email, password);
+    const result = await AuthService.login(identifier, password);
     return sendSuccess(res, 200, 'Inicio de sesión exitoso', result);
   } catch (error) {
     return sendError(res, 401, error.message);

@@ -1,7 +1,10 @@
 /**
  * @module AdminDashboard
- * @description Panel de administración para gestión de pedidos, filtros de tiempo e indicadores.
- *              Construido bajo estándar de ingeniería Senior con Tailwind CSS y Lucide React.
+ * @description Panel principal de administración con navegación por pestañas:
+ *              1. Pedidos: Gestión de órdenes, filtros de tiempo, estados y búsqueda.
+ *              2. Métricas y Analítica: BI con comparativas, KPIs, productos líderes y categorías.
+ *              3. Cuentas: Gestión de personal con roles (Admin, Auxiliar, Repartidor), claves y estados.
+ *              Construido bajo estándar Senior con Tailwind CSS y Lucide React.
  */
 import { useState, useEffect, useMemo } from 'react';
 import {
@@ -19,12 +22,16 @@ import {
   Loader2,
   ShieldCheck,
   Search,
+  BarChart3,
+  Users,
 } from 'lucide-react';
 import useAuth from '../hooks/useAuth';
 import Logo from '../components/common/Logo';
 import Button from '../components/common/Button';
 import OrderDetailModal from '../components/orders/OrderDetailModal';
 import OrderFormModal from '../components/orders/OrderFormModal';
+import AnalyticsView from '../components/admin/AnalyticsView';
+import AccountsView from '../components/admin/AccountsView';
 import {
   fetchOrders,
   createOrderRequest,
@@ -34,6 +41,9 @@ import { ORDER_STATUS_CONFIG } from '../models/order.model';
 
 const AdminDashboard = () => {
   const { user, logout } = useAuth();
+
+  // Pestaña activa: 'orders' | 'analytics' | 'accounts'
+  const [activeTab, setActiveTab] = useState('orders');
 
   const [orders, setOrders] = useState([]);
   const [dateRange, setDateRange] = useState('day'); // 'day' | 'week' | 'month' | 'all'
@@ -91,11 +101,13 @@ const AdminDashboard = () => {
     );
   }, [orders, searchQuery]);
 
-  // Métricas calculadas dinámicamente
+  // Métricas calculadas para la barra de resumen en la vista de pedidos
   const metrics = useMemo(() => {
     const totalOrders = filteredOrders.length;
     const totalRevenue = filteredOrders.reduce((sum, o) => sum + (o.pricing?.total || 0), 0);
-    const pendingCount = filteredOrders.filter((o) => o.status === 'pendiente' || o.status === 'en_preparacion').length;
+    const pendingCount = filteredOrders.filter(
+      (o) => o.status === 'pendiente' || o.status === 'en_preparacion'
+    ).length;
     const deliveredCount = filteredOrders.filter((o) => o.status === 'entregado').length;
 
     return { totalOrders, totalRevenue, pendingCount, deliveredCount };
@@ -141,196 +153,301 @@ const AdminDashboard = () => {
             </Button>
           </div>
         </div>
+
+        {/* Pestañas de Navegación del Panel de Administración */}
+        <div className="bg-red-800/60 border-t border-red-700/50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center gap-1 sm:gap-2">
+            <button
+              onClick={() => setActiveTab('orders')}
+              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold transition-all border-b-2 ${
+                activeTab === 'orders'
+                  ? 'border-brand-yellow text-brand-yellow bg-white/10'
+                  : 'border-transparent text-white/80 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Package className="w-4 h-4" />
+              <span>Pedidos</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('analytics')}
+              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold transition-all border-b-2 ${
+                activeTab === 'analytics'
+                  ? 'border-brand-yellow text-brand-yellow bg-white/10'
+                  : 'border-transparent text-white/80 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <BarChart3 className="w-4 h-4" />
+              <span>Métricas y Analítica</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('accounts')}
+              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold transition-all border-b-2 ${
+                activeTab === 'accounts'
+                  ? 'border-brand-yellow text-brand-yellow bg-white/10'
+                  : 'border-transparent text-white/80 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              <span>Cuentas</span>
+            </button>
+          </div>
+        </div>
       </header>
 
       {/* Contenido Principal */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* Barra de Filtros y Acción */}
-        <div className="bg-white rounded-xl p-4 shadow-2xs border border-slate-200/80 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1 mr-1">
-              <Filter className="w-3.5 h-3.5" />
-              <span>Período:</span>
-            </span>
-            {[
-              { id: 'day', label: 'Hoy (Día)' },
-              { id: 'week', label: 'Esta Semana' },
-              { id: 'month', label: 'Este Mes' },
-              { id: 'all', label: 'Todos' },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setDateRange(tab.id)}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors border ${
-                  dateRange === tab.id
-                    ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
-                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+        {/* VISTA 1: PEDIDOS */}
+        {activeTab === 'orders' && (
+          <div className="space-y-6">
+            {/* Barra de Filtros y Acción */}
+            <div className="bg-white rounded-xl p-4 shadow-2xs border border-slate-200/80 flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 mr-2">
+                  <Filter className="w-3.5 h-3.5 text-brand-red" />
+                  <span>Período:</span>
+                </span>
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
+                  <button
+                    onClick={() => setDateRange('day')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                      dateRange === 'day'
+                        ? 'bg-brand-red text-white shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Hoy
+                  </button>
+                  <button
+                    onClick={() => setDateRange('week')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                      dateRange === 'week'
+                        ? 'bg-brand-red text-white shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Semana
+                  </button>
+                  <button
+                    onClick={() => setDateRange('month')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                      dateRange === 'month'
+                        ? 'bg-brand-red text-white shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Mes
+                  </button>
+                  <button
+                    onClick={() => setDateRange('all')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                      dateRange === 'all'
+                        ? 'bg-brand-red text-white shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Todos
+                  </button>
+                </div>
+              </div>
 
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            <div className="relative flex-1 sm:w-64">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                placeholder="Buscar folio, cliente..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full text-xs pl-9 pr-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-red/20 focus:border-brand-red"
-              />
+              {/* Búsqueda y Botón de Creación */}
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                <div className="relative flex-1 sm:w-64">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Buscar folio, cliente, empresa..."
+                    className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-red/20 focus:border-brand-red"
+                  />
+                </div>
+
+                <Button variant="primary" size="md" onClick={() => setShowCreateModal(true)}>
+                  <Plus className="w-4 h-4 mr-1.5" />
+                  <span>Nuevo Pedido</span>
+                </Button>
+              </div>
             </div>
 
-            <Button variant="primary" size="md" onClick={() => setShowCreateModal(true)}>
-              <Plus className="w-4 h-4 mr-1.5" />
-              <span>Nuevo Pedido</span>
-            </Button>
-          </div>
-        </div>
+            {/* Tarjetas de Indicadores Operativos Rápidos */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-2xs flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block">
+                    Ventas del Período
+                  </span>
+                  <span className="text-2xl font-black text-slate-900 mt-1 block">
+                    ${metrics.totalRevenue}
+                  </span>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-red-50 text-brand-red flex items-center justify-center">
+                  <DollarSign className="w-5 h-5" />
+                </div>
+              </div>
 
-        {/* Tarjetas de Indicadores */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-2xs flex items-center justify-between">
-            <div>
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Total Órdenes</span>
-              <span className="text-2xl font-extrabold text-slate-900 mt-1 block">{metrics.totalOrders}</span>
-            </div>
-            <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-700">
-              <Package className="w-5 h-5" />
-            </div>
-          </div>
+              <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-2xs flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block">
+                    Total Pedidos
+                  </span>
+                  <span className="text-2xl font-black text-slate-900 mt-1 block">
+                    {metrics.totalOrders}
+                  </span>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center">
+                  <Package className="w-5 h-5" />
+                </div>
+              </div>
 
-          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-2xs flex items-center justify-between">
-            <div>
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Ingresos Venta</span>
-              <span className="text-2xl font-extrabold text-emerald-600 mt-1 block">${metrics.totalRevenue}</span>
-            </div>
-            <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
-              <DollarSign className="w-5 h-5" />
-            </div>
-          </div>
+              <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-2xs flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block">
+                    En Preparación
+                  </span>
+                  <span className="text-2xl font-black text-amber-600 mt-1 block">
+                    {metrics.pendingCount}
+                  </span>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                  <Clock className="w-5 h-5" />
+                </div>
+              </div>
 
-          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-2xs flex items-center justify-between">
-            <div>
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">En Proceso</span>
-              <span className="text-2xl font-extrabold text-amber-600 mt-1 block">{metrics.pendingCount}</span>
+              <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-2xs flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block">
+                    Entregados
+                  </span>
+                  <span className="text-2xl font-black text-emerald-600 mt-1 block">
+                    {metrics.deliveredCount}
+                  </span>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+              </div>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600">
-              <Clock className="w-5 h-5" />
-            </div>
-          </div>
 
-          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-2xs flex items-center justify-between">
-            <div>
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Entregados</span>
-              <span className="text-2xl font-extrabold text-green-600 mt-1 block">{metrics.deliveredCount}</span>
-            </div>
-            <div className="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center text-green-600">
-              <CheckCircle2 className="w-5 h-5" />
-            </div>
-          </div>
-        </div>
+            {/* Tabla de Pedidos */}
+            <div className="bg-white rounded-xl border border-slate-200/80 shadow-2xs overflow-hidden">
+              <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                  <Package className="w-4 h-4 text-brand-red" />
+                  <span>Listado de Pedidos</span>
+                </h3>
+                <span className="text-xs text-slate-500 font-medium">
+                  Mostrando {filteredOrders.length} {filteredOrders.length === 1 ? 'pedido' : 'pedidos'}
+                </span>
+              </div>
 
-        {/* Tabla de Historial */}
-        <div className="bg-white rounded-xl border border-slate-200/80 shadow-2xs overflow-hidden">
-          <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-900 tracking-tight flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-brand-red" />
-              <span>Historial de Pedidos</span>
-            </h2>
-            <span className="text-xs text-slate-500 font-medium">
-              {filteredOrders.length} {filteredOrders.length === 1 ? 'pedido encontrado' : 'pedidos encontrados'}
-            </span>
-          </div>
-
-          {loading ? (
-            <div className="p-12 flex flex-col items-center justify-center text-slate-400 gap-2 text-xs">
-              <Loader2 className="w-6 h-6 animate-spin text-brand-red" />
-              <span>Cargando historial de pedidos...</span>
-            </div>
-          ) : filteredOrders.length === 0 ? (
-            <div className="p-12 text-center text-slate-500 text-xs">
-              No se encontraron pedidos en el período seleccionado.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px]">
-                    <th className="p-3.5">Folio</th>
-                    <th className="p-3.5">Cliente</th>
-                    <th className="p-3.5">Tipo</th>
-                    <th className="p-3.5">Teléfono</th>
-                    <th className="p-3.5">Total</th>
-                    <th className="p-3.5">Estado</th>
-                    <th className="p-3.5 text-right">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {filteredOrders.map((order) => {
-                    const statusConfig = ORDER_STATUS_CONFIG[order.status] || ORDER_STATUS_CONFIG.pendiente;
-
-                    return (
-                      <tr key={order.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="p-3.5 font-bold text-slate-900">{order.id}</td>
-                        <td className="p-3.5">
-                          <div className="font-semibold text-slate-900">{order.client?.name}</div>
-                          {order.client?.companyName && (
-                            <div className="text-[11px] text-slate-500">{order.client.companyName}</div>
-                          )}
-                        </td>
-                        <td className="p-3.5">
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-                            {order.client?.type === 'empresa' ? (
-                              <>
-                                <Building2 className="w-3 h-3 text-slate-500" />
-                                <span>Empresa</span>
-                              </>
-                            ) : (
-                              <>
-                                <User className="w-3 h-3 text-slate-500" />
-                                <span>Particular</span>
-                              </>
-                            )}
-                          </span>
-                        </td>
-                        <td className="p-3.5 font-medium">{order.client?.phone}</td>
-                        <td className="p-3.5 font-extrabold text-slate-900">${order.pricing?.total}</td>
-                        <td className="p-3.5">
-                          <select
-                            value={order.status}
-                            onChange={(e) => handleStatusChange(order.id, e.target.value)}
-                            className={`text-xs font-bold px-2.5 py-1 rounded-lg border cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-400 ${statusConfig.badgeClass}`}
-                          >
-                            <option value="pendiente">Pendiente</option>
-                            <option value="en_preparacion">En Preparación</option>
-                            <option value="listo">Listo</option>
-                            <option value="en_camino">En Camino</option>
-                            <option value="entregado">Entregado</option>
-                            <option value="cancelado">Cancelado</option>
-                          </select>
-                        </td>
-                        <td className="p-3.5 text-right">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setSelectedOrder(order)}
-                          >
-                            <Eye className="w-3.5 h-3.5 mr-1" />
-                            <span>Detalles</span>
-                          </Button>
-                        </td>
+              {loading ? (
+                <div className="p-12 flex flex-col items-center justify-center text-slate-400 gap-2 text-xs">
+                  <Loader2 className="w-6 h-6 animate-spin text-brand-red" />
+                  <span>Cargando órdenes...</span>
+                </div>
+              ) : filteredOrders.length === 0 ? (
+                <div className="p-12 text-center text-slate-500 text-xs">
+                  No se encontraron pedidos para el período y criterio de búsqueda seleccionado.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px]">
+                        <th className="p-3.5">Folio</th>
+                        <th className="p-3.5">Fecha</th>
+                        <th className="p-3.5">Cliente</th>
+                        <th className="p-3.5">Tipo</th>
+                        <th className="p-3.5">Teléfono</th>
+                        <th className="p-3.5">Total</th>
+                        <th className="p-3.5">Estado</th>
+                        <th className="p-3.5 text-right">Acciones</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-slate-700">
+                      {filteredOrders.map((order) => {
+                        const statusConfig =
+                          ORDER_STATUS_CONFIG[order.status] || ORDER_STATUS_CONFIG.pendiente;
+
+                        return (
+                          <tr key={order.id} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="p-3.5 font-bold text-slate-900">{order.id}</td>
+                            <td className="p-3.5 text-slate-500">
+                              {new Date(order.createdAt).toLocaleDateString('es-MX', {
+                                day: '2-digit',
+                                month: 'short',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </td>
+                            <td className="p-3.5">
+                              <div className="font-semibold text-slate-900">{order.client?.name}</div>
+                              {order.client?.companyName && (
+                                <div className="text-[11px] text-slate-500">{order.client.companyName}</div>
+                              )}
+                            </td>
+                            <td className="p-3.5">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                                {order.client?.type === 'empresa' ? (
+                                  <>
+                                    <Building2 className="w-3 h-3 text-slate-500" />
+                                    <span>Empresa</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <User className="w-3 h-3 text-slate-500" />
+                                    <span>Particular</span>
+                                  </>
+                                )}
+                              </span>
+                            </td>
+                            <td className="p-3.5 font-medium">{order.client?.phone}</td>
+                            <td className="p-3.5 font-extrabold text-slate-900">
+                              ${order.pricing?.total}
+                            </td>
+                            <td className="p-3.5">
+                              <select
+                                value={order.status}
+                                onChange={(e) => handleStatusChange(order.id, e.target.value)}
+                                className={`text-xs font-bold px-2.5 py-1 rounded-lg border cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-400 ${statusConfig.badgeClass}`}
+                              >
+                                <option value="pendiente">Pendiente</option>
+                                <option value="en_preparacion">En Preparación</option>
+                                <option value="listo">Listo</option>
+                                <option value="en_camino">En Camino</option>
+                                <option value="entregado">Entregado</option>
+                                <option value="cancelado">Cancelado</option>
+                              </select>
+                            </td>
+                            <td className="p-3.5 text-right">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setSelectedOrder(order)}
+                              >
+                                <Eye className="w-3.5 h-3.5 mr-1" />
+                                <span>Detalles</span>
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* VISTA 2: MÉTRICAS Y ANALÍTICA */}
+        {activeTab === 'analytics' && <AnalyticsView orders={orders} />}
+
+        {/* VISTA 3: CONTROL DE CUENTAS */}
+        {activeTab === 'accounts' && <AccountsView />}
       </main>
 
       {/* Modal de Detalle */}
@@ -339,6 +456,7 @@ const AdminDashboard = () => {
           order={selectedOrder}
           onClose={() => setSelectedOrder(null)}
           onStatusChange={handleStatusChange}
+          hideFinancials={false}
         />
       )}
 

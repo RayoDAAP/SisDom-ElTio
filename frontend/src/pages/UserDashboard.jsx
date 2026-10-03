@@ -1,7 +1,10 @@
 /**
  * @module UserDashboard
- * @description Panel operativo para auxiliares y trabajadores.
- *              Permite capturar nuevos pedidos rápidamente y dar seguimiento a las órdenes del día.
+ * @description Panel operativo para auxiliares de pedidos.
+ *              Cumple estrictamente con las reglas de negocio:
+ *              - Solo captura pedidos y monitorea estados.
+ *              - NO muestra totales de venta ni métricas financieras.
+ *              - Solo muestra los pedidos realizados en el turno/día actual.
  */
 import { useState, useEffect } from 'react';
 import {
@@ -14,6 +17,7 @@ import {
   Clock,
   Loader2,
   ShieldCheck,
+  ClipboardList,
 } from 'lucide-react';
 import useAuth from '../hooks/useAuth';
 import Logo from '../components/common/Logo';
@@ -36,13 +40,14 @@ const UserDashboard = () => {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
+  // Carga únicamente pedidos del día / turno actual
   const loadOrders = async () => {
     setLoading(true);
     try {
       const data = await fetchOrders('day');
       setOrders(data);
     } catch (err) {
-      console.error('Error al cargar pedidos del día:', err);
+      console.error('Error al cargar pedidos del turno:', err);
     } finally {
       setLoading(false);
     }
@@ -80,7 +85,7 @@ const UserDashboard = () => {
             <Logo size="sm" />
             <div className="hidden sm:block border-l border-white/20 pl-4">
               <span className="text-xs font-semibold uppercase tracking-wider text-brand-yellow block">
-                Portal de Trabajadores
+                Portal de Auxiliares
               </span>
               <h1 className="text-sm font-bold text-white tracking-tight">
                 Tacos &ldquo;El Tío&rdquo; — Barbacoa y Menudo
@@ -95,7 +100,7 @@ const UserDashboard = () => {
                 {user?.name}
               </span>
               <span className="text-brand-yellow font-medium text-[10px] uppercase tracking-wider">
-                Auxiliar de Pedidos
+                Auxiliar de Turno
               </span>
             </div>
 
@@ -122,7 +127,7 @@ const UserDashboard = () => {
               Bienvenido, {user?.name}
             </h2>
             <p className="text-xs text-slate-500 mt-1">
-              Gestiona los pedidos activos del día o registra una nueva orden de cliente.
+              Monitorea los pedidos registrados en tu turno y captura nuevas órdenes.
             </p>
           </div>
 
@@ -132,26 +137,26 @@ const UserDashboard = () => {
           </Button>
         </div>
 
-        {/* Tabla de Pedidos del Día */}
+        {/* Tabla de Pedidos del Turno (Sin totales de venta) */}
         <div className="bg-white rounded-xl border border-slate-200/80 shadow-2xs overflow-hidden">
           <div className="p-4 border-b border-slate-100 flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-900 tracking-tight flex items-center gap-2">
-              <Package className="w-4 h-4 text-brand-red" />
-              <span>Pedidos Registrados Hoy</span>
+              <ClipboardList className="w-4 h-4 text-brand-red" />
+              <span>Pedidos del Turno Actual</span>
             </h3>
             <span className="text-xs text-slate-500 font-medium">
-              {orders.length} {orders.length === 1 ? 'pedido registrado' : 'pedidos registrados'}
+              {orders.length} {orders.length === 1 ? 'pedido en este turno' : 'pedidos en este turno'}
             </span>
           </div>
 
           {loading ? (
             <div className="p-12 flex flex-col items-center justify-center text-slate-400 gap-2 text-xs">
               <Loader2 className="w-6 h-6 animate-spin text-brand-red" />
-              <span>Cargando órdenes del día...</span>
+              <span>Cargando órdenes del turno...</span>
             </div>
           ) : orders.length === 0 ? (
             <div className="p-12 text-center text-slate-500 text-xs">
-              No hay pedidos registrados el día de hoy. Haz clic en &ldquo;Capturar Nuevo Pedido&rdquo; para registrar uno.
+              No hay pedidos registrados en este turno. Haz clic en &ldquo;Capturar Nuevo Pedido&rdquo; para registrar uno.
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -159,25 +164,35 @@ const UserDashboard = () => {
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px]">
                     <th className="p-3.5">Folio</th>
+                    <th className="p-3.5">Hora</th>
                     <th className="p-3.5">Cliente</th>
                     <th className="p-3.5">Tipo</th>
                     <th className="p-3.5">Teléfono</th>
-                    <th className="p-3.5">Total</th>
                     <th className="p-3.5">Estado</th>
                     <th className="p-3.5 text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
                   {orders.map((order) => {
-                    const statusConfig = ORDER_STATUS_CONFIG[order.status] || ORDER_STATUS_CONFIG.pendiente;
+                    const statusConfig =
+                      ORDER_STATUS_CONFIG[order.status] || ORDER_STATUS_CONFIG.pendiente;
+                    const orderTime = order.createdAt
+                      ? new Date(order.createdAt).toLocaleTimeString('es-MX', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })
+                      : 'N/A';
 
                     return (
                       <tr key={order.id} className="hover:bg-slate-50/80 transition-colors">
                         <td className="p-3.5 font-bold text-slate-900">{order.id}</td>
+                        <td className="p-3.5 text-slate-500 font-medium">{orderTime}</td>
                         <td className="p-3.5">
                           <div className="font-semibold text-slate-900">{order.client?.name}</div>
                           {order.client?.companyName && (
-                            <div className="text-[11px] text-slate-500">{order.client.companyName}</div>
+                            <div className="text-[11px] text-slate-500">
+                              {order.client.companyName}
+                            </div>
                           )}
                         </td>
                         <td className="p-3.5">
@@ -196,7 +211,6 @@ const UserDashboard = () => {
                           </span>
                         </td>
                         <td className="p-3.5 font-medium">{order.client?.phone}</td>
-                        <td className="p-3.5 font-extrabold text-slate-900">${order.pricing?.total}</td>
                         <td className="p-3.5">
                           <select
                             value={order.status}
@@ -218,7 +232,7 @@ const UserDashboard = () => {
                             onClick={() => setSelectedOrder(order)}
                           >
                             <Eye className="w-3.5 h-3.5 mr-1" />
-                            <span>Detalles</span>
+                            <span>Ver Detalle</span>
                           </Button>
                         </td>
                       </tr>
@@ -231,16 +245,17 @@ const UserDashboard = () => {
         </div>
       </main>
 
-      {/* Modal de Detalle */}
+      {/* Modal de Detalle (Oculta totales financieros para auxiliar) */}
       {selectedOrder && (
         <OrderDetailModal
           order={selectedOrder}
           onClose={() => setSelectedOrder(null)}
           onStatusChange={handleStatusChange}
+          hideFinancials={true}
         />
       )}
 
-      {/* Modal de Registro de Pedido */}
+      {/* Modal de Captura de Pedido */}
       {showCreateModal && (
         <OrderFormModal
           onClose={() => setShowCreateModal(false)}
