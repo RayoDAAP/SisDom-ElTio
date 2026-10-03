@@ -4,11 +4,11 @@
  */
 
 export const PRICES = {
-  barbacoaPerKg: 360, // $360 por kg ($0.36 por gramo)
-  menudoHalfLiter: 65,  // $65 medio litro
-  menudoLiter: 120,    // $120 litro completo
-  salsa: 5,            // $5 por pieza
-  onion: 5,            // $5 por porción
+  barbacoaPerKg: 480,    // $480 por kg ($0.48 por gramo)
+  menudoHalfLiter: 100,  // $100 medio litro
+  menudoLiter: 160,      // $160 litro completo
+  salsa: 5,              // $5 por pieza
+  onion: 5,              // $5 por pieza
   tortillas: {
     'none': { label: 'Ninguno', price: 0 },
     '5_piezas': { label: '5 piezas', price: 10 },

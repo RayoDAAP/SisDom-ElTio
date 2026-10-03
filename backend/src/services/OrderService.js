@@ -3,6 +3,7 @@
  * @description Servicio con la lógica de negocio para pedidos.
  */
 import { orderStore, ORDER_STATUS } from '../models/Order.js';
+import { registerClientAndColonia } from './ClientService.js';
 
 let orderCounter = 1004;
 
@@ -49,7 +50,7 @@ export const getOrderById = (id) => {
 };
 
 /**
- * Crea un nuevo pedido.
+ * Crea un nuevo pedido y guarda automáticamente al cliente y la tarifa por colonia.
  * @param {Object} orderData
  * @param {string} createdByName
  */
@@ -63,6 +64,12 @@ export const createOrder = (orderData, createdByName) => {
   };
 
   orderStore.unshift(newOrder);
+
+  // Guardado de cliente y colonia de forma automática
+  if (orderData.client) {
+    registerClientAndColonia(orderData.client, orderData.pricing?.shippingFee);
+  }
+
   return newOrder;
 };
 

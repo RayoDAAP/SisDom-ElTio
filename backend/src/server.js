@@ -7,7 +7,7 @@ import env from './config/env.js';
 import app from './app.js';
 
 app.listen(env.PORT, () => {
-  console.log(`\n🌮 Tacos El Tío — API corriendo en http://localhost:${env.PORT}`);
-  console.log(`📋 Entorno: ${env.NODE_ENV}`);
-  console.log(`✅ Health check: http://localhost:${env.PORT}/api/health\n`);
+  console.log(`\n[Server] Tacos El Tío — API corriendo en http://localhost:${env.PORT}`);
+  console.log(`[Config] Entorno: ${env.NODE_ENV}`);
+  console.log(`[Status] Health check: http://localhost:${env.PORT}/api/health\n`);
 });

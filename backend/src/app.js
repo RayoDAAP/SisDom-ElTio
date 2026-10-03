@@ -6,6 +6,7 @@ import express from 'express';
 import cors from 'cors';
 import authRoutes from './routes/authRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
+import clientRoutes from './routes/clientRoutes.js';
 import { sendError } from './utils/responseHelper.js';
 
 const app = express();
@@ -27,21 +28,21 @@ app.use(express.urlencoded({ extended: true }));
 
 // ─── Rutas ───────────────────────────────────────────────────────────────────
 
-// Ruta raíz de bienvenida (evita respuesta 404 al abrir la URL base del backend)
 app.get('/', (_req, res) => {
   res.json({
     success: true,
-    message: 'API de Tacos El Tío funcionando correctamente 🌮',
+    message: 'API de Tacos El Tío funcionando correctamente',
     healthCheck: '/api/health',
   });
 });
 
 app.get('/api/health', (_req, res) => {
-  res.json({ success: true, message: 'API de Tacos El Tío funcionando correctamente 🌮' });
+  res.json({ success: true, message: 'API de Tacos El Tío funcionando correctamente' });
 });
 
 app.use('/api/auth', authRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api', clientRoutes);
 
 // ─── Ruta no encontrada ──────────────────────────────────────────────────────
 

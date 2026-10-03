@@ -1,9 +1,10 @@
 /**
  * @module OrderFormModal
- * @description Formulario modal para captura rápida de pedidos.
- *              Implementa accesibilidad, cálculo reactivo en tiempo real y Tailwind CSS.
+ * @description Formulario modular de captura rápida de pedidos.
+ *              Incluye búsqueda por teléfono, autollenado de cliente y envío por colonia,
+ *              múltiples platillos de barbacoa, selectores de menudo 0-10 y paquetes de tortillas.
  */
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   X,
   User,
@@ -17,9 +18,16 @@ import {
   FileText,
   Save,
   AlertCircle,
-  CreditCard,
+  Search,
+  CheckCircle2,
+  Plus,
+  Trash2,
 } from 'lucide-react';
 import { PRICES } from '../../models/order.model';
+import {
+  searchClientByPhoneRequest,
+  fetchShippingFeeByColoniaRequest,
+} from '../../services/clientService';
 import Button from '../common/Button';
 import Input from '../common/Input';
 
@@ -33,7 +41,7 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  // ─── Estado del Formulario ──────────────────────────────────────────────────
+  // ─── Estado del Cliente ─────────────────────────────────────────────────────
   const [clientType, setClientType] = useState('particular');
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
@@ -42,14 +50,22 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
   const [number, setNumber] = useState('');
   const [colonia, setColonia] = useState('');
 
-  // Barbacoa
-  const [barbacoaMode, setBarbacoaMode] = useState('gramos'); // gramos, monto, platillos
+  const [isSearchingClient, setIsSearchingClient] = useState(false);
+  const [clientFound, setClientFound] = useState(false);
+
+  // ─── Estado de Productos ───────────────────────────────────────────────────
+
+  // Barbacoa: Pestaña por defecto "monto" (Por Precio $)
+  const [barbacoaMode, setBarbacoaMode] = useState('monto');
   const [barbacoaGrams, setBarbacoaGrams] = useState(500);
   const [barbacoaAmount, setBarbacoaAmount] = useState(200);
-  const [barbacoaPlatillosQty, setBarbacoaPlatillosQty] = useState(2);
-  const [barbacoaPlatillosPrice, setBarbacoaPlatillosPrice] = useState(100);
 
-  // Menudo
+  // Lista dinámica para Barbacoa por Platillos (Múltiples platillos)
+  const [barbacoaPlatillosList, setBarbacoaPlatillosList] = useState([
+    { id: '1', quantity: 1, unitPrice: 100 },
+  ]);
+
+  // Menudo (Selects 0 al 10)
   const [menudoHalfLiterQty, setMenudoHalfLiterQty] = useState(0);
   const [menudoLiterQty, setMenudoLiterQty] = useState(0);
 
@@ -57,6 +73,9 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
   const [salsaRedQty, setSalsaRedQty] = useState(1);
   const [salsaGreenQty, setSalsaGreenQty] = useState(1);
   const [onionQty, setOnionQty] = useState(1);
+
+  // Tortillas: Cantidad de paquetes x Tipo de paquete
+  const [tortillasPkgQty, setTortillasPkgQty] = useState(1);
   const [tortillasOption, setTortillasOption] = useState('10_piezas');
 
   // Envío y Notas
@@ -66,23 +85,121 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
+  // ─── Búsqueda Automática de Cliente por Teléfono ────────────────────────────
+  const handlePhoneChange = useCallback(async (newPhone) => {
+    setClientPhone(newPhone);
+    const cleaned = newPhone.trim();
+
+    if (cleaned.length >= 7) {
+      setIsSearchingClient(true);
+      try {
+        const found = await searchClientByPhoneRequest(cleaned);
+        if (found) {
+          setClientName(found.name || '');
+          setClientType(found.type || 'particular');
+          setCompanyName(found.companyName || '');
+          setStreet(found.street || '');
+          setNumber(found.number || '');
+          setColonia(found.colonia || '');
+          setClientFound(true);
+
+          if (found.colonia) {
+            const fee = await fetchShippingFeeByColoniaRequest(found.colonia);
+            if (fee !== null && fee !== undefined) {
+              setShippingFee(fee);
+            }
+          }
+        } else {
+          setClientFound(false);
+        }
+      } catch (err) {
+        console.error('Error al buscar cliente por teléfono:', err);
+      } finally {
+        setIsSearchingClient(false);
+      }
+    } else {
+      setClientFound(false);
+    }
+  }, []);
+
+  // ─── Búsqueda de Envío por Colonia ─────────────────────────────────────────
+  const handleColoniaChange = useCallback(async (newColonia) => {
+    setColonia(newColonia);
+    if (newColonia.trim().length >= 3) {
+      try {
+        const fee = await fetchShippingFeeByColoniaRequest(newColonia);
+        if (fee !== null && fee !== undefined) {
+          setShippingFee(fee);
+        }
+      } catch (err) {
+        console.error('Error al consultar tarifa por colonia:', err);
+      }
+    }
+  }, []);
+
+  // ─── Métodos para Platillos de Barbacoa Dinámicos ──────────────────────────
+  const handleAddPlatilloRow = () => {
+    setBarbacoaPlatillosList((prev) => [
+      ...prev,
+      { id: Date.now().toString(), quantity: 1, unitPrice: 100 },
+    ]);
+  };
+
+  const handleRemovePlatilloRow = (id) => {
+    if (barbacoaPlatillosList.length === 1) return;
+    setBarbacoaPlatillosList((prev) => prev.filter((p) => p.id !== id));
+  };
+
+  const handleUpdatePlatilloRow = (id, field, value) => {
+    setBarbacoaPlatillosList((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, [field]: Number(value) || 0 } : p))
+    );
+  };
+
   // ─── Cálculo en Tiempo Real ─────────────────────────────────────────────────
   const calculations = useMemo(() => {
     let barbacoaTotal = 0;
     let barbacoaLabel = '';
+    const barbacoaItems = [];
 
     if (barbacoaMode === 'gramos') {
       const g = Number(barbacoaGrams) || 0;
       barbacoaTotal = Math.round((g / 1000) * PRICES.barbacoaPerKg);
       barbacoaLabel = `${g}g de Barbacoa`;
+      if (barbacoaTotal > 0) {
+        barbacoaItems.push({
+          type: 'gramos',
+          amount: g,
+          label: barbacoaLabel,
+          price: barbacoaTotal,
+        });
+      }
     } else if (barbacoaMode === 'monto') {
       barbacoaTotal = Number(barbacoaAmount) || 0;
-      barbacoaLabel = `Barbacoa por Monto ($${barbacoaTotal})`;
+      barbacoaLabel = `Barbacoa por Precio ($${barbacoaTotal})`;
+      if (barbacoaTotal > 0) {
+        barbacoaItems.push({
+          type: 'monto',
+          amount: barbacoaTotal,
+          label: barbacoaLabel,
+          price: barbacoaTotal,
+        });
+      }
     } else if (barbacoaMode === 'platillos') {
-      const q = Number(barbacoaPlatillosQty) || 0;
-      const p = Number(barbacoaPlatillosPrice) || 0;
-      barbacoaTotal = q * p;
-      barbacoaLabel = `${q} Platillo(s) de Barbacoa de $${p} c/u`;
+      barbacoaPlatillosList.forEach((p) => {
+        const rowTotal = p.quantity * p.unitPrice;
+        if (rowTotal > 0) {
+          barbacoaTotal += rowTotal;
+          barbacoaItems.push({
+            type: 'platillo',
+            quantity: p.quantity,
+            unitPrice: p.unitPrice,
+            label: `${p.quantity} Platillo(s) de Barbacoa de $${p.unitPrice} c/u`,
+            price: rowTotal,
+          });
+        }
+      });
+      barbacoaLabel = `${barbacoaItems.length} grupo(s) de platillos`;
     }
 
     const menudoHalfTotal = (Number(menudoHalfLiterQty) || 0) * PRICES.menudoHalfLiter;
@@ -93,12 +210,14 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
     const greenTotal = (Number(salsaGreenQty) || 0) * PRICES.salsa;
     const onionTotal = (Number(onionQty) || 0) * PRICES.onion;
 
-    let tortillasTotal = 0;
-    let tortillasLabel = 'Ninguno';
+    let tortillasUnitTotal = 0;
+    let tortillasOptionLabel = 'Ninguno';
     if (tortillasOption && PRICES.tortillas[tortillasOption]) {
-      tortillasTotal = PRICES.tortillas[tortillasOption].price;
-      tortillasLabel = PRICES.tortillas[tortillasOption].label;
+      tortillasUnitTotal = PRICES.tortillas[tortillasOption].price;
+      tortillasOptionLabel = PRICES.tortillas[tortillasOption].label;
     }
+    const tortillasPkgCount = Number(tortillasPkgQty) || 0;
+    const tortillasTotal = tortillasOption === 'none' ? 0 : tortillasPkgCount * tortillasUnitTotal;
 
     const extrasTotal = redTotal + greenTotal + onionTotal + tortillasTotal;
     const subtotal = barbacoaTotal + menudoTotal + extrasTotal;
@@ -107,13 +226,14 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
 
     return {
       barbacoaTotal,
-      barbacoaLabel,
+      barbacoaItems,
       menudoHalfTotal,
       menudoLiterTotal,
       menudoTotal,
       extrasTotal,
       tortillasTotal,
-      tortillasLabel,
+      tortillasOptionLabel,
+      tortillasPkgCount,
       subtotal,
       fee,
       total,
@@ -122,13 +242,13 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
     barbacoaMode,
     barbacoaGrams,
     barbacoaAmount,
-    barbacoaPlatillosQty,
-    barbacoaPlatillosPrice,
+    barbacoaPlatillosList,
     menudoHalfLiterQty,
     menudoLiterQty,
     salsaRedQty,
     salsaGreenQty,
     onionQty,
+    tortillasPkgQty,
     tortillasOption,
     shippingFee,
   ]);
@@ -146,16 +266,7 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
 
     try {
       const items = {
-        barbacoa: calculations.barbacoaTotal > 0 ? [
-          {
-            type: barbacoaMode,
-            amount: barbacoaGrams,
-            quantity: barbacoaPlatillosQty,
-            unitPrice: barbacoaPlatillosPrice,
-            label: calculations.barbacoaLabel,
-            price: calculations.barbacoaTotal,
-          },
-        ] : [],
+        barbacoa: calculations.barbacoaItems,
         menudo: [
           ...(menudoHalfLiterQty > 0 ? [{ size: '0.5L', quantity: menudoHalfLiterQty, label: `${menudoHalfLiterQty} Medio Litro de Menudo`, price: calculations.menudoHalfTotal }] : []),
           ...(menudoLiterQty > 0 ? [{ size: '1L', quantity: menudoLiterQty, label: `${menudoLiterQty} Litro de Menudo`, price: calculations.menudoLiterTotal }] : []),
@@ -165,7 +276,8 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
           salsaGreen: salsaGreenQty,
           onion: onionQty,
           tortillas: tortillasOption,
-          tortillasLabel: calculations.tortillasLabel,
+          tortillasPkgQty: calculations.tortillasPkgCount,
+          tortillasLabel: `${calculations.tortillasPkgCount} paquete(s) de ${calculations.tortillasOptionLabel}`,
           tortillasPrice: calculations.tortillasTotal,
         },
       };
@@ -240,11 +352,21 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
 
           {/* 1. Datos del Cliente */}
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-              <User className="w-4 h-4 text-slate-500" />
-              <span>Datos del Cliente</span>
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                <User className="w-4 h-4 text-slate-500" />
+                <span>Datos del Cliente / Empresa</span>
+              </h3>
 
+              {clientFound && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-300">
+                  <CheckCircle2 className="w-3 h-3" />
+                  <span>Cliente registrado</span>
+                </span>
+              )}
+            </div>
+
+            {/* Selector Tipo Cliente */}
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
@@ -272,7 +394,26 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
               </button>
             </div>
 
+            {/* Inputs Teléfono & Nombre */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="relative">
+                <Input
+                  id="client-phone"
+                  label="Teléfono *"
+                  type="tel"
+                  value={clientPhone}
+                  onChange={(e) => handlePhoneChange(e.target.value)}
+                  placeholder="6141234567"
+                  icon={Phone}
+                  required
+                />
+                {isSearchingClient && (
+                  <div className="absolute right-3 top-8 text-slate-400">
+                    <Search className="w-4 h-4 animate-spin" />
+                  </div>
+                )}
+              </div>
+
               <Input
                 id="client-name"
                 label="Nombre del Cliente *"
@@ -280,16 +421,6 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
                 onChange={(e) => setClientName(e.target.value)}
                 placeholder="Ej. Juan Pérez"
                 icon={User}
-                required
-              />
-              <Input
-                id="client-phone"
-                label="Teléfono *"
-                type="tel"
-                value={clientPhone}
-                onChange={(e) => setClientPhone(e.target.value)}
-                placeholder="6141234567"
-                icon={Phone}
                 required
               />
             </div>
@@ -305,6 +436,7 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
               />
             )}
 
+            {/* Dirección */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <Input
                 id="street"
@@ -325,28 +457,28 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
                 id="colonia"
                 label="Colonia"
                 value={colonia}
-                onChange={(e) => setColonia(e.target.value)}
+                onChange={(e) => handleColoniaChange(e.target.value)}
                 placeholder="Centro"
               />
             </div>
           </div>
 
-          {/* 2. Barbacoa */}
+          {/* 2. Barbacoa ($480 / kg) */}
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                 <Flame className="w-4 h-4 text-amber-600" />
-                <span>Barbacoa</span>
+                <span>Barbacoa ($480/kg)</span>
               </h3>
               <span className="text-xs font-extrabold text-amber-900 bg-amber-100 px-2.5 py-1 rounded-md">
-                Subtotal: ${calculations.barbacoaTotal}
+                Subtotal Barbacoa: ${calculations.barbacoaTotal}
               </span>
             </div>
 
             <div className="flex gap-2">
               {[
+                { id: 'monto', label: 'Por Precio ($)' },
                 { id: 'gramos', label: 'Por Gramos' },
-                { id: 'monto', label: 'Por Monto ($)' },
                 { id: 'platillos', label: 'Por Platillos' },
               ].map((tab) => (
                 <button
@@ -364,17 +496,7 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
               ))}
             </div>
 
-            {barbacoaMode === 'gramos' && (
-              <Input
-                id="barbacoa-grams"
-                label="Gramos deseados (g)"
-                type="number"
-                value={barbacoaGrams}
-                onChange={(e) => setBarbacoaGrams(e.target.value)}
-                placeholder="500"
-              />
-            )}
-
+            {/* Pestaña Por Precio ($) */}
             {barbacoaMode === 'monto' && (
               <Input
                 id="barbacoa-amount"
@@ -386,27 +508,111 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
               />
             )}
 
+            {/* Pestaña Por Gramos */}
+            {barbacoaMode === 'gramos' && (
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBarbacoaGrams(500)}
+                    className={`flex-1 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                      Number(barbacoaGrams) === 500
+                        ? 'bg-amber-600 text-white border-amber-600 shadow-2xs'
+                        : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                    }`}
+                  >
+                    1/2 kg (500g)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBarbacoaGrams(1000)}
+                    className={`flex-1 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                      Number(barbacoaGrams) === 1000
+                        ? 'bg-amber-600 text-white border-amber-600 shadow-2xs'
+                        : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                    }`}
+                  >
+                    1 kg (1000g)
+                  </button>
+                </div>
+
+                <Input
+                  id="barbacoa-grams"
+                  label="Gramos personalizados (g)"
+                  type="number"
+                  value={barbacoaGrams}
+                  onChange={(e) => setBarbacoaGrams(e.target.value)}
+                  placeholder="Ej. 750"
+                />
+              </div>
+            )}
+
+            {/* Pestaña Por Platillos (Filas dinámicas) */}
             {barbacoaMode === 'platillos' && (
-              <div className="grid grid-cols-2 gap-3">
-                <Input
-                  id="barbacoa-platillos-qty"
-                  label="Cantidad de Platillos"
-                  type="number"
-                  value={barbacoaPlatillosQty}
-                  onChange={(e) => setBarbacoaPlatillosQty(e.target.value)}
-                />
-                <Input
-                  id="barbacoa-platillos-price"
-                  label="Precio por Platillo ($)"
-                  type="number"
-                  value={barbacoaPlatillosPrice}
-                  onChange={(e) => setBarbacoaPlatillosPrice(e.target.value)}
-                />
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  {barbacoaPlatillosList.map((p, idx) => (
+                    <div key={p.id} className="flex items-center gap-3 bg-white p-2.5 rounded-lg border border-slate-200">
+                      <div className="w-32">
+                        <label className="text-[10px] font-semibold text-slate-500 block uppercase">
+                          Cantidad
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={p.quantity}
+                          onChange={(e) => handleUpdatePlatilloRow(p.id, 'quantity', e.target.value)}
+                          className="w-full text-xs border border-slate-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-red/20"
+                        />
+                      </div>
+
+                      <div className="flex-1">
+                        <label className="text-[10px] font-semibold text-slate-500 block uppercase">
+                          Precio c/u ($)
+                        </label>
+                        <input
+                          type="number"
+                          min="10"
+                          value={p.unitPrice}
+                          onChange={(e) => handleUpdatePlatilloRow(p.id, 'unitPrice', e.target.value)}
+                          className="w-full text-xs border border-slate-300 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-red/20"
+                        />
+                      </div>
+
+                      <div className="text-right w-24">
+                        <span className="text-[10px] text-slate-400 block font-medium">Subtotal</span>
+                        <span className="text-xs font-bold text-slate-900">${p.quantity * p.unitPrice}</span>
+                      </div>
+
+                      {barbacoaPlatillosList.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePlatilloRow(p.id)}
+                          className="text-slate-400 hover:text-red-600 p-1.5 rounded-md hover:bg-red-50"
+                          aria-label="Eliminar platillo"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddPlatilloRow}
+                  className="w-full"
+                >
+                  <Plus className="w-3.5 h-3.5 mr-1" />
+                  <span>Agregar otro platillo</span>
+                </Button>
               </div>
             )}
           </div>
 
-          {/* 3. Menudo */}
+          {/* 3. Menudo ($100 Medio Litro / $160 Litro) */}
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
@@ -414,29 +620,50 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
                 <span>Menudo</span>
               </h3>
               <span className="text-xs font-extrabold text-red-900 bg-red-100 px-2.5 py-1 rounded-md">
-                Subtotal: ${calculations.menudoTotal}
+                Subtotal Menudo: ${calculations.menudoTotal}
               </span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <Input
-                id="menudo-half-liter"
-                label="Medio Litro (0.5L) — $65"
-                type="number"
-                value={menudoHalfLiterQty}
-                onChange={(e) => setMenudoHalfLiterQty(e.target.value)}
-              />
-              <Input
-                id="menudo-liter"
-                label="Litro Completo (1L) — $120"
-                type="number"
-                value={menudoLiterQty}
-                onChange={(e) => setMenudoLiterQty(e.target.value)}
-              />
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="menudo-half-liter" className="text-xs font-semibold text-slate-700 tracking-wide">
+                  Medio litro ($100)
+                </label>
+                <select
+                  id="menudo-half-liter"
+                  value={menudoHalfLiterQty}
+                  onChange={(e) => setMenudoHalfLiterQty(Number(e.target.value))}
+                  className="w-full text-sm rounded-lg border border-slate-300 px-3.5 py-2.5 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-red/20 focus:border-brand-red"
+                >
+                  {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                    <option key={num} value={num}>
+                      {num} {num === 1 ? 'porción' : 'porciones'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="menudo-liter" className="text-xs font-semibold text-slate-700 tracking-wide">
+                  Litro ($160)
+                </label>
+                <select
+                  id="menudo-liter"
+                  value={menudoLiterQty}
+                  onChange={(e) => setMenudoLiterQty(Number(e.target.value))}
+                  className="w-full text-sm rounded-lg border border-slate-300 px-3.5 py-2.5 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-red/20 focus:border-brand-red"
+                >
+                  {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                    <option key={num} value={num}>
+                      {num} {num === 1 ? 'porción' : 'porciones'}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 
-          {/* 4. Extras */}
+          {/* 4. Extras & Complementos */}
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
               <PlusCircle className="w-4 h-4 text-emerald-600" />
@@ -446,47 +673,68 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <Input
                 id="salsa-red"
-                label="Salsa Roja (pza - $5)"
+                label="Salsa Roja (piezas - $5)"
                 type="number"
                 value={salsaRedQty}
                 onChange={(e) => setSalsaRedQty(e.target.value)}
               />
               <Input
                 id="salsa-green"
-                label="Salsa Verde (pza - $5)"
+                label="Salsa Verde (piezas - $5)"
                 type="number"
                 value={salsaGreenQty}
                 onChange={(e) => setSalsaGreenQty(e.target.value)}
               />
               <Input
                 id="onion"
-                label="Cebolla (porción - $5)"
+                label="Cebolla (piezas - $5)"
                 type="number"
                 value={onionQty}
                 onChange={(e) => setOnionQty(e.target.value)}
               />
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="tortillas-option" className="text-xs font-semibold text-slate-700 tracking-wide uppercase">
-                Paquete de Tortillas
-              </label>
-              <select
-                id="tortillas-option"
-                value={tortillasOption}
-                onChange={(e) => setTortillasOption(e.target.value)}
-                className="w-full text-sm rounded-lg border border-slate-300 px-3.5 py-2.5 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-red/20 focus:border-brand-red"
-              >
-                <option value="none">Ninguno ($0)</option>
-                <option value="5_piezas">5 piezas ($10)</option>
-                <option value="10_piezas">10 piezas ($20)</option>
-                <option value="medio_kg">1/2 kg ($25)</option>
-                <option value="kilo">1 kg ($45)</option>
-              </select>
+            {/* Tortillas: Cantidad + Paquete */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1 border-t border-slate-200">
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="tortillas-pkg-qty" className="text-xs font-semibold text-slate-700 tracking-wide uppercase">
+                  Cantidad de Paquetes
+                </label>
+                <select
+                  id="tortillas-pkg-qty"
+                  value={tortillasPkgQty}
+                  onChange={(e) => setTortillasPkgQty(Number(e.target.value))}
+                  className="w-full text-sm rounded-lg border border-slate-300 px-3.5 py-2.5 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-red/20 focus:border-brand-red"
+                >
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                    <option key={num} value={num}>
+                      {num} {num === 1 ? 'paquete' : 'paquetes'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="tortillas-option" className="text-xs font-semibold text-slate-700 tracking-wide uppercase">
+                  Tipo de Paquete
+                </label>
+                <select
+                  id="tortillas-option"
+                  value={tortillasOption}
+                  onChange={(e) => setTortillasOption(e.target.value)}
+                  className="w-full text-sm rounded-lg border border-slate-300 px-3.5 py-2.5 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-red/20 focus:border-brand-red"
+                >
+                  <option value="none">Ninguno ($0)</option>
+                  <option value="5_piezas">5 piezas ($10)</option>
+                  <option value="10_piezas">10 piezas ($20)</option>
+                  <option value="medio_kg">1/2 kg ($25)</option>
+                  <option value="kilo">1 kg ($45)</option>
+                </select>
+              </div>
             </div>
           </div>
 
-          {/* 5. Envío y Notas */}
+          {/* 5. Envío e Indicaciones */}
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
               <Truck className="w-4 h-4 text-slate-500" />
