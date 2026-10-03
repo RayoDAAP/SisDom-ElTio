@@ -1,11 +1,23 @@
 /**
  * @module UserDashboard
- * @description Panel para Cuentas Auxiliares / Trabajadores.
- *              Permite capturar pedidos rápidamente y gestionar los pedidos activos del día.
+ * @description Panel operativo para auxiliares y trabajadores.
+ *              Permite capturar nuevos pedidos rápidamente y dar seguimiento a las órdenes del día.
  */
 import { useState, useEffect } from 'react';
+import {
+  Plus,
+  Package,
+  Eye,
+  LogOut,
+  Building2,
+  User,
+  Clock,
+  Loader2,
+  ShieldCheck,
+} from 'lucide-react';
 import useAuth from '../hooks/useAuth';
 import Logo from '../components/common/Logo';
+import Button from '../components/common/Button';
 import OrderDetailModal from '../components/orders/OrderDetailModal';
 import OrderFormModal from '../components/orders/OrderFormModal';
 import {
@@ -13,7 +25,7 @@ import {
   createOrderRequest,
   updateOrderStatusRequest,
 } from '../services/orderService';
-import { ORDER_STATUS_LABELS } from '../models/order.model';
+import { ORDER_STATUS_CONFIG } from '../models/order.model';
 
 const UserDashboard = () => {
   const { user, logout } = useAuth();
@@ -27,7 +39,7 @@ const UserDashboard = () => {
   const loadOrders = async () => {
     setLoading(true);
     try {
-      const data = await fetchOrders('day'); // Carga pedidos del día para trabajadores
+      const data = await fetchOrders('day');
       setOrders(data);
     } catch (err) {
       console.error('Error al cargar pedidos del día:', err);
@@ -60,102 +72,136 @@ const UserDashboard = () => {
   };
 
   return (
-    <div className="dashboard">
-      {/* Header */}
-      <header className="dashboard__header">
-        <div className="dashboard__header-brand">
-          <Logo size="sm" />
-          <div>
-            <div className="dashboard__header-title">Portal de Trabajadores</div>
-            <div className="dashboard__header-subtitle">Tacos "El Tío" — Barbacoa y Menudo</div>
+    <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
+      {/* Encabezado */}
+      <header className="bg-brand-red text-white shadow-md sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Logo size="sm" />
+            <div className="hidden sm:block border-l border-white/20 pl-4">
+              <span className="text-xs font-semibold uppercase tracking-wider text-brand-yellow block">
+                Portal de Trabajadores
+              </span>
+              <h1 className="text-sm font-bold text-white tracking-tight">
+                Tacos &ldquo;El Tío&rdquo; — Barbacoa y Menudo
+              </h1>
+            </div>
           </div>
-        </div>
-        <div className="dashboard__header-actions">
-          <div className="dashboard__user-info">
-            <div className="dashboard__user-name">{user?.name}</div>
-            <div className="dashboard__user-role">Auxiliar de Pedidos</div>
+
+          <div className="flex items-center gap-4">
+            <div className="hidden md:flex flex-col items-end text-xs">
+              <span className="font-bold text-white flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5 text-brand-yellow" />
+                {user?.name}
+              </span>
+              <span className="text-brand-yellow font-medium text-[10px] uppercase tracking-wider">
+                Auxiliar de Pedidos
+              </span>
+            </div>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={logout}
+              ariaLabel="Cerrar sesión"
+              className="text-white hover:bg-white/10"
+            >
+              <LogOut className="w-4 h-4 mr-1.5" />
+              <span>Salir</span>
+            </Button>
           </div>
-          <button className="dashboard__logout" onClick={logout}>
-            Cerrar sesión
-          </button>
         </div>
       </header>
 
-      {/* Main content */}
-      <main className="dashboard__main">
+      {/* Contenido Principal */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         {/* Banner de Bienvenida y Acción Principal */}
-        <div className="toolbar">
+        <div className="bg-white rounded-xl p-6 shadow-2xs border border-slate-200/80 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h2 className="dashboard__welcome" style={{ margin: 0 }}>
-              ¡Hola, {user?.name?.split(' ')[0]}! 🌮
+            <h2 className="text-lg font-bold text-slate-900 tracking-tight">
+              Bienvenido, {user?.name}
             </h2>
-            <p className="dashboard__sub" style={{ margin: 0 }}>
-              Captura nuevos pedidos de clientes o consulta las órdenes de hoy.
+            <p className="text-xs text-slate-500 mt-1">
+              Gestiona los pedidos activos del día o registra una nueva orden de cliente.
             </p>
           </div>
 
-          <button className="btn btn--primary" onClick={() => setShowCreateModal(true)}>
-            + Capturar Nuevo Pedido
-          </button>
+          <Button variant="primary" size="md" onClick={() => setShowCreateModal(true)}>
+            <Plus className="w-4 h-4 mr-1.5" />
+            <span>Capturar Nuevo Pedido</span>
+          </Button>
         </div>
 
         {/* Tabla de Pedidos del Día */}
-        <div className="panel">
-          <div className="panel__header">
-            <h3 className="panel__title">📦 Pedidos del Día</h3>
-            <span className="text-muted" style={{ fontSize: '0.85rem' }}>
-              {orders.length} pedidos hoy
+        <div className="bg-white rounded-xl border border-slate-200/80 shadow-2xs overflow-hidden">
+          <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+            <h3 className="text-sm font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <Package className="w-4 h-4 text-brand-red" />
+              <span>Pedidos Registrados Hoy</span>
+            </h3>
+            <span className="text-xs text-slate-500 font-medium">
+              {orders.length} {orders.length === 1 ? 'pedido registrado' : 'pedidos registrados'}
             </span>
           </div>
 
           {loading ? (
-            <div className="loading-screen" style={{ minHeight: '150px', background: 'transparent', color: '#666' }}>
-              Cargando pedidos...
+            <div className="p-12 flex flex-col items-center justify-center text-slate-400 gap-2 text-xs">
+              <Loader2 className="w-6 h-6 animate-spin text-brand-red" />
+              <span>Cargando órdenes del día...</span>
             </div>
           ) : orders.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
-              No hay pedidos registrados hoy. ¡Haz clic en "+ Capturar Nuevo Pedido" para comenzar!
+            <div className="p-12 text-center text-slate-500 text-xs">
+              No hay pedidos registrados el día de hoy. Haz clic en &ldquo;Capturar Nuevo Pedido&rdquo; para registrar uno.
             </div>
           ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table className="data-table">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr>
-                    <th>Folio</th>
-                    <th>Cliente</th>
-                    <th>Tipo</th>
-                    <th>Teléfono</th>
-                    <th>Total</th>
-                    <th>Estado</th>
-                    <th>Acciones</th>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px]">
+                    <th className="p-3.5">Folio</th>
+                    <th className="p-3.5">Cliente</th>
+                    <th className="p-3.5">Tipo</th>
+                    <th className="p-3.5">Teléfono</th>
+                    <th className="p-3.5">Total</th>
+                    <th className="p-3.5">Estado</th>
+                    <th className="p-3.5 text-right">Acciones</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
                   {orders.map((order) => {
-                    const statusInfo = ORDER_STATUS_LABELS[order.status] || ORDER_STATUS_LABELS.pendiente;
+                    const statusConfig = ORDER_STATUS_CONFIG[order.status] || ORDER_STATUS_CONFIG.pendiente;
 
                     return (
-                      <tr key={order.id}>
-                        <td><strong>{order.id}</strong></td>
-                        <td>
-                          <div><strong>{order.client?.name}</strong></div>
+                      <tr key={order.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="p-3.5 font-bold text-slate-900">{order.id}</td>
+                        <td className="p-3.5">
+                          <div className="font-semibold text-slate-900">{order.client?.name}</div>
                           {order.client?.companyName && (
-                            <small style={{ color: '#666' }}>{order.client.companyName}</small>
+                            <div className="text-[11px] text-slate-500">{order.client.companyName}</div>
                           )}
                         </td>
-                        <td>
-                          <span className="badge-tag">
-                            {order.client?.type === 'empresa' ? '🏢 Empresa' : '🏠 Particular'}
+                        <td className="p-3.5">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                            {order.client?.type === 'empresa' ? (
+                              <>
+                                <Building2 className="w-3 h-3 text-slate-500" />
+                                <span>Empresa</span>
+                              </>
+                            ) : (
+                              <>
+                                <User className="w-3 h-3 text-slate-500" />
+                                <span>Particular</span>
+                              </>
+                            )}
                           </span>
                         </td>
-                        <td>{order.client?.phone}</td>
-                        <td><strong>${order.pricing?.total}</strong></td>
-                        <td>
+                        <td className="p-3.5 font-medium">{order.client?.phone}</td>
+                        <td className="p-3.5 font-extrabold text-slate-900">${order.pricing?.total}</td>
+                        <td className="p-3.5">
                           <select
-                            className="status-select"
                             value={order.status}
                             onChange={(e) => handleStatusChange(order.id, e.target.value)}
-                            style={{ backgroundColor: statusInfo.bg, color: statusInfo.color }}
+                            className={`text-xs font-bold px-2.5 py-1 rounded-lg border cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-400 ${statusConfig.badgeClass}`}
                           >
                             <option value="pendiente">Pendiente</option>
                             <option value="en_preparacion">En Preparación</option>
@@ -165,13 +211,15 @@ const UserDashboard = () => {
                             <option value="cancelado">Cancelado</option>
                           </select>
                         </td>
-                        <td>
-                          <button
-                            className="btn-action-view"
+                        <td className="p-3.5 text-right">
+                          <Button
+                            variant="outline"
+                            size="sm"
                             onClick={() => setSelectedOrder(order)}
                           >
-                            🔍 Ver Detalles
-                          </button>
+                            <Eye className="w-3.5 h-3.5 mr-1" />
+                            <span>Detalles</span>
+                          </Button>
                         </td>
                       </tr>
                     );
@@ -192,7 +240,7 @@ const UserDashboard = () => {
         />
       )}
 
-      {/* Modal de Nuevo Pedido */}
+      {/* Modal de Registro de Pedido */}
       {showCreateModal && (
         <OrderFormModal
           onClose={() => setShowCreateModal(false)}

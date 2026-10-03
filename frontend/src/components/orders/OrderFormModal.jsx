@@ -1,11 +1,38 @@
 /**
  * @module OrderFormModal
- * @description Formulario modular para registrar pedidos en el portal de trabajadores.
+ * @description Formulario modal para captura rápida de pedidos.
+ *              Implementa accesibilidad, cálculo reactivo en tiempo real y Tailwind CSS.
  */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import {
+  X,
+  User,
+  Building2,
+  Phone,
+  MapPin,
+  Flame,
+  Soup,
+  PlusCircle,
+  Truck,
+  FileText,
+  Save,
+  AlertCircle,
+  CreditCard,
+} from 'lucide-react';
 import { PRICES } from '../../models/order.model';
+import Button from '../common/Button';
+import Input from '../common/Input';
 
 const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
+  // Manejo de la tecla Escape para cerrar
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   // ─── Estado del Formulario ──────────────────────────────────────────────────
   const [clientType, setClientType] = useState('particular');
   const [clientName, setClientName] = useState('');
@@ -30,7 +57,7 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
   const [salsaRedQty, setSalsaRedQty] = useState(1);
   const [salsaGreenQty, setSalsaGreenQty] = useState(1);
   const [onionQty, setOnionQty] = useState(1);
-  const [tortillasOption, setTortillasOption] = useState('10_piezas'); // none, 5_piezas, 10_piezas, medio_kg, kilo
+  const [tortillasOption, setTortillasOption] = useState('10_piezas');
 
   // Envío y Notas
   const [shippingFee, setShippingFee] = useState(40);
@@ -172,277 +199,283 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-container modal-container--lg" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
+    <div
+      className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="order-form-title"
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[92vh] border border-slate-100"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Encabezado */}
+        <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
           <div>
-            <span className="modal-subtitle">Captura Rápida</span>
-            <h2 className="modal-title">🌮 Nuevo Pedido</h2>
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-brand-yellow">
+              Captura de Orden
+            </span>
+            <h2 id="order-form-title" className="text-xl font-bold tracking-tight">
+              Nuevo Pedido
+            </h2>
           </div>
-          <button className="modal-close-btn" onClick={onClose}>✕</button>
+          <button
+            onClick={onClose}
+            aria-label="Cerrar ventana"
+            className="text-slate-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="modal-body form-grid">
-          {errorMsg && <div className="login-form__error">{errorMsg}</div>}
+        {/* Formulario */}
+        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto flex-1 flex flex-col gap-6">
+          {errorMsg && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-xs text-red-800 font-medium">
+              <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
 
           {/* 1. Datos del Cliente */}
-          <div className="form-card">
-            <h3 className="section-heading">👤 Datos del Cliente</h3>
-            <div className="radio-toggle">
-              <label className={`toggle-option ${clientType === 'particular' ? 'active' : ''}`}>
-                <input
-                  type="radio"
-                  name="clientType"
-                  value="particular"
-                  checked={clientType === 'particular'}
-                  onChange={() => setClientType('particular')}
-                />
-                🏠 Particular
-              </label>
-              <label className={`toggle-option ${clientType === 'empresa' ? 'active' : ''}`}>
-                <input
-                  type="radio"
-                  name="clientType"
-                  value="empresa"
-                  checked={clientType === 'empresa'}
-                  onChange={() => setClientType('empresa')}
-                />
-                🏢 Empresa
-              </label>
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+              <User className="w-4 h-4 text-slate-500" />
+              <span>Datos del Cliente</span>
+            </h3>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setClientType('particular')}
+                className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 border transition-all ${
+                  clientType === 'particular'
+                    ? 'bg-white border-brand-red text-brand-red shadow-2xs'
+                    : 'bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <User className="w-3.5 h-3.5" />
+                <span>Particular</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setClientType('empresa')}
+                className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 border transition-all ${
+                  clientType === 'empresa'
+                    ? 'bg-white border-brand-red text-brand-red shadow-2xs'
+                    : 'bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <Building2 className="w-3.5 h-3.5" />
+                <span>Empresa</span>
+              </button>
             </div>
 
-            <div className="input-row-2">
-              <div>
-                <label className="input-group__label">Nombre del Cliente *</label>
-                <input
-                  type="text"
-                  className="input-group__field"
-                  value={clientName}
-                  onChange={(e) => setClientName(e.target.value)}
-                  placeholder="Ej. Juan Pérez"
-                  required
-                />
-              </div>
-              <div>
-                <label className="input-group__label">Teléfono *</label>
-                <input
-                  type="tel"
-                  className="input-group__field"
-                  value={clientPhone}
-                  onChange={(e) => setClientPhone(e.target.value)}
-                  placeholder="6141234567"
-                  required
-                />
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Input
+                id="client-name"
+                label="Nombre del Cliente *"
+                value={clientName}
+                onChange={(e) => setClientName(e.target.value)}
+                placeholder="Ej. Juan Pérez"
+                icon={User}
+                required
+              />
+              <Input
+                id="client-phone"
+                label="Teléfono *"
+                type="tel"
+                value={clientPhone}
+                onChange={(e) => setClientPhone(e.target.value)}
+                placeholder="6141234567"
+                icon={Phone}
+                required
+              />
             </div>
 
             {clientType === 'empresa' && (
-              <div style={{ marginTop: '0.5rem' }}>
-                <label className="input-group__label">Nombre de la Empresa</label>
-                <input
-                  type="text"
-                  className="input-group__field"
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                  placeholder="Ej. Constructora del Norte"
-                />
-              </div>
+              <Input
+                id="company-name"
+                label="Nombre de la Empresa"
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                placeholder="Ej. Constructora del Norte SA"
+                icon={Building2}
+              />
             )}
 
-            <div className="input-row-3" style={{ marginTop: '0.5rem' }}>
-              <div>
-                <label className="input-group__label">Calle</label>
-                <input
-                  type="text"
-                  className="input-group__field"
-                  value={street}
-                  onChange={(e) => setStreet(e.target.value)}
-                  placeholder="Av. Juárez"
-                />
-              </div>
-              <div>
-                <label className="input-group__label">Número</label>
-                <input
-                  type="text"
-                  className="input-group__field"
-                  value={number}
-                  onChange={(e) => setNumber(e.target.value)}
-                  placeholder="123"
-                />
-              </div>
-              <div>
-                <label className="input-group__label">Colonia</label>
-                <input
-                  type="text"
-                  className="input-group__field"
-                  value={colonia}
-                  onChange={(e) => setColonia(e.target.value)}
-                  placeholder="Centro"
-                />
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Input
+                id="street"
+                label="Calle"
+                value={street}
+                onChange={(e) => setStreet(e.target.value)}
+                placeholder="Av. Juárez"
+                icon={MapPin}
+              />
+              <Input
+                id="number"
+                label="Número"
+                value={number}
+                onChange={(e) => setNumber(e.target.value)}
+                placeholder="123"
+              />
+              <Input
+                id="colonia"
+                label="Colonia"
+                value={colonia}
+                onChange={(e) => setColonia(e.target.value)}
+                placeholder="Centro"
+              />
             </div>
           </div>
 
           {/* 2. Barbacoa */}
-          <div className="form-card">
-            <h3 className="section-heading">🥩 Barbacoa</h3>
-            <div className="tab-buttons">
-              <button
-                type="button"
-                className={`tab-btn ${barbacoaMode === 'gramos' ? 'active' : ''}`}
-                onClick={() => setBarbacoaMode('gramos')}
-              >
-                Por Gramos
-              </button>
-              <button
-                type="button"
-                className={`tab-btn ${barbacoaMode === 'monto' ? 'active' : ''}`}
-                onClick={() => setBarbacoaMode('monto')}
-              >
-                Por Monto ($)
-              </button>
-              <button
-                type="button"
-                className={`tab-btn ${barbacoaMode === 'platillos' ? 'active' : ''}`}
-                onClick={() => setBarbacoaMode('platillos')}
-              >
-                Por Platillos
-              </button>
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                <Flame className="w-4 h-4 text-amber-600" />
+                <span>Barbacoa</span>
+              </h3>
+              <span className="text-xs font-extrabold text-amber-900 bg-amber-100 px-2.5 py-1 rounded-md">
+                Subtotal: ${calculations.barbacoaTotal}
+              </span>
+            </div>
+
+            <div className="flex gap-2">
+              {[
+                { id: 'gramos', label: 'Por Gramos' },
+                { id: 'monto', label: 'Por Monto ($)' },
+                { id: 'platillos', label: 'Por Platillos' },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setBarbacoaMode(tab.id)}
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-medium border transition-all ${
+                    barbacoaMode === tab.id
+                      ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
 
             {barbacoaMode === 'gramos' && (
-              <div className="input-row-2" style={{ marginTop: '0.5rem' }}>
-                <div>
-                  <label className="input-group__label">Gramos (g)</label>
-                  <input
-                    type="number"
-                    step="50"
-                    className="input-group__field"
-                    value={barbacoaGrams}
-                    onChange={(e) => setBarbacoaGrams(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="input-group__label">Precio estimado</label>
-                  <div className="price-badge">${calculations.barbacoaTotal}</div>
-                </div>
-              </div>
+              <Input
+                id="barbacoa-grams"
+                label="Gramos deseados (g)"
+                type="number"
+                value={barbacoaGrams}
+                onChange={(e) => setBarbacoaGrams(e.target.value)}
+                placeholder="500"
+              />
             )}
 
             {barbacoaMode === 'monto' && (
-              <div className="input-row-2" style={{ marginTop: '0.5rem' }}>
-                <div>
-                  <label className="input-group__label">Monto deseado ($)</label>
-                  <input
-                    type="number"
-                    step="10"
-                    className="input-group__field"
-                    value={barbacoaAmount}
-                    onChange={(e) => setBarbacoaAmount(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="input-group__label">Total Barbacoa</label>
-                  <div className="price-badge">${calculations.barbacoaTotal}</div>
-                </div>
-              </div>
+              <Input
+                id="barbacoa-amount"
+                label="Monto deseado ($)"
+                type="number"
+                value={barbacoaAmount}
+                onChange={(e) => setBarbacoaAmount(e.target.value)}
+                placeholder="200"
+              />
             )}
 
             {barbacoaMode === 'platillos' && (
-              <div className="input-row-2" style={{ marginTop: '0.5rem' }}>
-                <div>
-                  <label className="input-group__label">Cantidad de Platillos</label>
-                  <input
-                    type="number"
-                    min="1"
-                    className="input-group__field"
-                    value={barbacoaPlatillosQty}
-                    onChange={(e) => setBarbacoaPlatillosQty(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="input-group__label">Precio por Platillo ($)</label>
-                  <input
-                    type="number"
-                    min="10"
-                    className="input-group__field"
-                    value={barbacoaPlatillosPrice}
-                    onChange={(e) => setBarbacoaPlatillosPrice(e.target.value)}
-                  />
-                </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  id="barbacoa-platillos-qty"
+                  label="Cantidad de Platillos"
+                  type="number"
+                  value={barbacoaPlatillosQty}
+                  onChange={(e) => setBarbacoaPlatillosQty(e.target.value)}
+                />
+                <Input
+                  id="barbacoa-platillos-price"
+                  label="Precio por Platillo ($)"
+                  type="number"
+                  value={barbacoaPlatillosPrice}
+                  onChange={(e) => setBarbacoaPlatillosPrice(e.target.value)}
+                />
               </div>
             )}
           </div>
 
           {/* 3. Menudo */}
-          <div className="form-card">
-            <h3 className="section-heading">🍲 Menudo</h3>
-            <div className="input-row-2">
-              <div>
-                <label className="input-group__label">Medio Litro (0.5L) — $65 c/u</label>
-                <input
-                  type="number"
-                  min="0"
-                  className="input-group__field"
-                  value={menudoHalfLiterQty}
-                  onChange={(e) => setMenudoHalfLiterQty(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="input-group__label">Litro Completo (1L) — $120 c/u</label>
-                <input
-                  type="number"
-                  min="0"
-                  className="input-group__field"
-                  value={menudoLiterQty}
-                  onChange={(e) => setMenudoLiterQty(e.target.value)}
-                />
-              </div>
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                <Soup className="w-4 h-4 text-red-600" />
+                <span>Menudo</span>
+              </h3>
+              <span className="text-xs font-extrabold text-red-900 bg-red-100 px-2.5 py-1 rounded-md">
+                Subtotal: ${calculations.menudoTotal}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Input
+                id="menudo-half-liter"
+                label="Medio Litro (0.5L) — $65"
+                type="number"
+                value={menudoHalfLiterQty}
+                onChange={(e) => setMenudoHalfLiterQty(e.target.value)}
+              />
+              <Input
+                id="menudo-liter"
+                label="Litro Completo (1L) — $120"
+                type="number"
+                value={menudoLiterQty}
+                onChange={(e) => setMenudoLiterQty(e.target.value)}
+              />
             </div>
           </div>
 
           {/* 4. Extras */}
-          <div className="form-card">
-            <h3 className="section-heading">🌶️ Extras</h3>
-            <div className="input-row-3">
-              <div>
-                <label className="input-group__label">Salsa Roja (pzas)</label>
-                <input
-                  type="number"
-                  min="0"
-                  className="input-group__field"
-                  value={salsaRedQty}
-                  onChange={(e) => setSalsaRedQty(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="input-group__label">Salsa Verde (pzas)</label>
-                <input
-                  type="number"
-                  min="0"
-                  className="input-group__field"
-                  value={salsaGreenQty}
-                  onChange={(e) => setSalsaGreenQty(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="input-group__label">Cebolla (porciones)</label>
-                <input
-                  type="number"
-                  min="0"
-                  className="input-group__field"
-                  value={onionQty}
-                  onChange={(e) => setOnionQty(e.target.value)}
-                />
-              </div>
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+              <PlusCircle className="w-4 h-4 text-emerald-600" />
+              <span>Complementos y Extras</span>
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Input
+                id="salsa-red"
+                label="Salsa Roja (pza - $5)"
+                type="number"
+                value={salsaRedQty}
+                onChange={(e) => setSalsaRedQty(e.target.value)}
+              />
+              <Input
+                id="salsa-green"
+                label="Salsa Verde (pza - $5)"
+                type="number"
+                value={salsaGreenQty}
+                onChange={(e) => setSalsaGreenQty(e.target.value)}
+              />
+              <Input
+                id="onion"
+                label="Cebolla (porción - $5)"
+                type="number"
+                value={onionQty}
+                onChange={(e) => setOnionQty(e.target.value)}
+              />
             </div>
 
-            <div style={{ marginTop: '0.75rem' }}>
-              <label className="input-group__label">Paquete de Tortillas</label>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="tortillas-option" className="text-xs font-semibold text-slate-700 tracking-wide uppercase">
+                Paquete de Tortillas
+              </label>
               <select
-                className="input-group__field"
+                id="tortillas-option"
                 value={tortillasOption}
                 onChange={(e) => setTortillasOption(e.target.value)}
+                className="w-full text-sm rounded-lg border border-slate-300 px-3.5 py-2.5 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-red/20 focus:border-brand-red"
               >
                 <option value="none">Ninguno ($0)</option>
                 <option value="5_piezas">5 piezas ($10)</option>
@@ -453,56 +486,58 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
             </div>
           </div>
 
-          {/* 5. Costo de Envío y Notas */}
-          <div className="form-card">
-            <h3 className="section-heading">🚚 Envío e Indicaciones</h3>
-            <div className="input-row-2">
-              <div>
-                <label className="input-group__label">Costo de Envío ($)</label>
-                <input
-                  type="number"
-                  min="0"
-                  className="input-group__field"
-                  value={shippingFee}
-                  onChange={(e) => setShippingFee(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="input-group__label">Notas Especiales</label>
-                <input
-                  type="text"
-                  className="input-group__field"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Ej. Sin picante, llamar al llegar"
-                />
-              </div>
+          {/* 5. Envío y Notas */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+              <Truck className="w-4 h-4 text-slate-500" />
+              <span>Envío e Indicaciones</span>
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Input
+                id="shipping-fee"
+                label="Costo de Envío ($)"
+                type="number"
+                value={shippingFee}
+                onChange={(e) => setShippingFee(e.target.value)}
+                icon={Truck}
+              />
+              <Input
+                id="order-notes"
+                label="Notas / Indicaciones"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Ej. Sin picante, llamar al entregar"
+                icon={FileText}
+              />
             </div>
           </div>
 
-          {/* 6. Totales y Envío */}
-          <div className="summary-banner">
+          {/* Banner de Resumen de Totales */}
+          <div className="bg-slate-900 text-white rounded-xl p-4 flex flex-wrap items-center justify-around gap-4 text-center">
             <div>
-              <span className="summary-banner__label">Subtotal:</span>
-              <strong className="summary-banner__value">${calculations.subtotal}</strong>
+              <span className="text-[11px] uppercase tracking-wider text-slate-400 block font-semibold">Subtotal</span>
+              <span className="text-lg font-bold">${calculations.subtotal}</span>
+            </div>
+            <div className="border-x border-slate-800 px-6">
+              <span className="text-[11px] uppercase tracking-wider text-slate-400 block font-semibold">Envío</span>
+              <span className="text-lg font-bold">${calculations.fee}</span>
             </div>
             <div>
-              <span className="summary-banner__label">Envío:</span>
-              <strong className="summary-banner__value">${calculations.fee}</strong>
-            </div>
-            <div>
-              <span className="summary-banner__label">TOTAL:</span>
-              <strong className="summary-banner__total">${calculations.total}</strong>
+              <span className="text-[11px] uppercase tracking-wider text-brand-yellow block font-semibold">TOTAL PEDIDO</span>
+              <span className="text-2xl font-extrabold text-brand-yellow">${calculations.total}</span>
             </div>
           </div>
 
-          <div className="modal-footer" style={{ marginTop: '1rem' }}>
-            <button type="button" className="btn btn--secondary" onClick={onClose}>
+          {/* Footer Botones */}
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="outline" size="md" onClick={onClose} type="button">
               Cancelar
-            </button>
-            <button type="submit" className="btn btn--primary" disabled={isSubmitting}>
-              {isSubmitting ? 'Guardando...' : '💾 Registrar Pedido'}
-            </button>
+            </Button>
+            <Button variant="primary" size="md" type="submit" isLoading={isSubmitting}>
+              <Save className="w-4 h-4 mr-1.5" />
+              <span>Registrar Pedido</span>
+            </Button>
           </div>
         </form>
       </div>
