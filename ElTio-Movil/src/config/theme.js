@@ -27,20 +27,25 @@ export const THEME = {
     white: '#FFFFFF',
 
     // Estados de entrega
+    statusMissing: {
+      bg: '#FFE4E6',
+      text: '#9F1239',
+      border: '#FDA4AF',
+    },
     statusPending: {
       bg: '#FEF3C7',
       text: '#92400E',
       border: '#FCD34D',
     },
-    statusPreparing: {
-      bg: '#E0F2FE',
-      text: '#075985',
-      border: '#7DD3FC',
-    },
     statusReady: {
       bg: '#D1FAE5',
       text: '#065F46',
       border: '#6EE7B7',
+    },
+    statusAssigned: {
+      bg: '#DBEAFE',
+      text: '#1E40AF',
+      border: '#93C5FD',
     },
     statusOnTheWay: {
       bg: '#EDE9FE',

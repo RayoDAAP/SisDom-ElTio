@@ -59,4 +59,33 @@ export const orderService = {
       throw error;
     }
   },
+
+  /**
+   * Reporta que falta algún producto o complemento en el pedido.
+   * Cambia el estatus a 'incompleto' con máxima prioridad.
+   * @param {string} token
+   * @param {string} orderId
+   * @param {string} note
+   */
+  async reportMissing(token, orderId, note) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/orders/${orderId}/report-missing`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ note }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Error al reportar faltante');
+      }
+
+      return data.data.order;
+    } catch (error) {
+      throw error;
+    }
+  },
 };

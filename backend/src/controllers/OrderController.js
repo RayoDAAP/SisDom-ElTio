@@ -83,3 +83,35 @@ export const assignOrder = (req, res) => {
     return sendError(res, 400, error.message);
   }
 };
+
+/**
+ * POST /api/orders/:id/report-missing
+ * Reporta que falta algún producto o complemento en el pedido.
+ * Pone el pedido en estado 'incompleto' con máxima prioridad.
+ */
+export const reportMissingItems = (req, res) => {
+  try {
+    const { note } = req.body;
+    const updatedOrder = OrderService.reportMissingItems(req.params.id, note, req.user);
+    return sendSuccess(res, 200, 'Reporte de faltante registrado con máxima prioridad', {
+      order: updatedOrder,
+    });
+  } catch (error) {
+    return sendError(res, 400, error.message);
+  }
+};
+
+/**
+ * PATCH /api/orders/:id/payment-status
+ * Actualiza el estado de la transferencia bancaria (pendiente / aceptada).
+ */
+export const updatePaymentStatus = (req, res) => {
+  try {
+    const { transferStatus } = req.body;
+    const updatedOrder = OrderService.updatePaymentStatus(req.params.id, transferStatus);
+    return sendSuccess(res, 200, 'Estado de pago actualizado', { order: updatedOrder });
+  } catch (error) {
+    return sendError(res, 400, error.message);
+  }
+};
+

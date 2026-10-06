@@ -25,11 +25,19 @@ import {
   Coffee,
   Banknote,
   ArrowRightLeft,
+  AlertTriangle,
+  Lock,
 } from 'lucide-react';
 import { ORDER_STATUS_CONFIG, PAYMENT_METHODS, TRANSFER_STATUS } from '../../models/order.model';
 import Button from '../common/Button';
 
-const OrderDetailModal = ({ order, onClose, onStatusChange, hideFinancials = false }) => {
+const OrderDetailModal = ({
+  order,
+  onClose,
+  onStatusChange,
+  onPaymentStatusChange,
+  hideFinancials = false,
+}) => {
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') onClose();
@@ -40,8 +48,9 @@ const OrderDetailModal = ({ order, onClose, onStatusChange, hideFinancials = fal
 
   if (!order) return null;
 
-  const { client, items, pricing, status, id, createdAt, createdBy, notes, payment } = order;
+  const { client, items, pricing, status, id, createdAt, createdBy, notes, payment, missingReport } = order;
   const statusConfig = ORDER_STATUS_CONFIG[status] || ORDER_STATUS_CONFIG.pendiente;
+  const isLocked = status === 'entregado' || status === 'cancelado';
 
   return (
     <div
@@ -88,25 +97,55 @@ const OrderDetailModal = ({ order, onClose, onStatusChange, hideFinancials = fal
               <label htmlFor="status-change-select" className="text-xs font-medium text-slate-600">
                 Cambiar a:
               </label>
-              <select
-                id="status-change-select"
-                value={status}
-                onChange={(e) => onStatusChange(id, e.target.value)}
-                className="text-xs font-semibold bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-brand-red/20 focus:border-brand-red cursor-pointer"
-              >
-                <option value="pendiente">Pendiente</option>
-                <option value="en_preparacion">En Preparación</option>
-                <option value="listo">Listo para Entrega</option>
-                <option value="en_camino">En Camino</option>
-                <option value="entregado">Entregado</option>
-                <option value="cancelado">Cancelado</option>
-              </select>
+              {isLocked ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-200 text-slate-700 text-xs font-bold">
+                  <Lock className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Finalizado (No editable)</span>
+                </span>
+              ) : (
+                <select
+                  id="status-change-select"
+                  value={status}
+                  onChange={(e) => onStatusChange(id, e.target.value)}
+                  className="text-xs font-semibold bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-brand-red/20 focus:border-brand-red cursor-pointer"
+                >
+                  <option value="incompleto">Faltante (Urgente)</option>
+                  <option value="pendiente">Pendiente</option>
+                  <option value="listo">Listo para Entrega</option>
+                  <option value="asignado">Asignado a Repartidor</option>
+                  <option value="en_camino">En Camino</option>
+                  <option value="entregado">Entregado</option>
+                  <option value="cancelado">Cancelado</option>
+                </select>
+              )}
             </div>
           )}
         </div>
 
         {/* Cuerpo del Modal */}
         <div className="p-6 overflow-y-auto flex-1 flex flex-col gap-6">
+          {/* Reporte de Faltante si existe */}
+          {missingReport && (
+            <div className="p-4 bg-rose-50 border-2 border-rose-300 rounded-xl text-rose-950 flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+              <div className="space-y-1 flex-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold uppercase tracking-wider text-rose-700">
+                    Reporte de Faltante en Pedido
+                  </span>
+                  <span className="text-[11px] text-rose-600">
+                    {missingReport.reportedAt ? new Date(missingReport.reportedAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : ''}
+                  </span>
+                </div>
+                <p className="text-sm font-bold text-rose-900 bg-white/70 p-2.5 rounded-lg border border-rose-200">
+                  {missingReport.note}
+                </p>
+                <div className="text-[11px] text-rose-700 font-medium">
+                  Reportado por: <strong>{missingReport.reportedBy || 'Repartidor'}</strong>
+                </div>
+              </div>
+            </div>
+          )}
           {/* Metadatos */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200/80 text-xs">
             <div className="flex items-center gap-2.5 text-slate-700">
@@ -325,7 +364,7 @@ const OrderDetailModal = ({ order, onClose, onStatusChange, hideFinancials = fal
                     )}
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span>Estado transferencia:</span>
                     <span
                       className={`px-2 py-0.5 rounded font-bold text-[10px] ${
@@ -338,6 +377,20 @@ const OrderDetailModal = ({ order, onClose, onStatusChange, hideFinancials = fal
                         ? 'Aceptada / Validada'
                         : 'Pendiente de Confirmar'}
                     </span>
+                    {onPaymentStatusChange && !hideFinancials && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onPaymentStatusChange(
+                            id,
+                            payment.transferStatus === TRANSFER_STATUS.ACCEPTED ? 'pendiente' : 'aceptada'
+                          )
+                        }
+                        className="text-[11px] font-bold px-2 py-0.5 rounded bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                      >
+                        Marcar como {payment.transferStatus === TRANSFER_STATUS.ACCEPTED ? 'Pendiente' : 'Aceptada'}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

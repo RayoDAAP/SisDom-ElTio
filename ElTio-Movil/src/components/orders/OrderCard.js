@@ -16,15 +16,24 @@ import {
   Banknote,
   Clock,
   Navigation,
+  AlertTriangle,
+  Lock,
 } from 'lucide-react-native';
 import { THEME } from '../../config/theme';
 import { Badge } from '../common/Badge';
 import { Button } from '../common/Button';
 import { ORDER_STATUS_CONFIG, ORDER_STATUS, PAYMENT_METHODS } from '../../models/order.model';
 
-export const OrderCard = ({ order, onStatusChange, onViewDetail, isUpdating = false }) => {
-  const { id, client, pricing, status, payment, notes } = order;
+export const OrderCard = ({
+  order,
+  onStatusChange,
+  onViewDetail,
+  onReportMissing,
+  isUpdating = false,
+}) => {
+  const { id, client, pricing, status, payment, notes, missingReport } = order;
   const statusCfg = ORDER_STATUS_CONFIG[status] || ORDER_STATUS_CONFIG[ORDER_STATUS.PENDING];
+  const isLocked = status === ORDER_STATUS.DELIVERED || status === ORDER_STATUS.CANCELLED;
 
   const fullAddress = `Calle ${client?.street || ''} #${client?.number || ''}, Col. ${client?.colonia || ''}`;
 
@@ -59,6 +68,17 @@ export const OrderCard = ({ order, onStatusChange, onViewDetail, isUpdating = fa
         </View>
         <Badge label={statusCfg.label} colors={statusCfg.colors} />
       </View>
+
+      {/* Aviso de Faltante si fue reportado */}
+      {missingReport ? (
+        <View style={styles.missingReportBanner}>
+          <AlertTriangle size={15} color="#BE123C" />
+          <View style={styles.missingReportContent}>
+            <Text style={styles.missingReportTitle}>Faltante Reportado (Urgente):</Text>
+            <Text style={styles.missingReportText}>{missingReport.note}</Text>
+          </View>
+        </View>
+      ) : null}
 
       {/* Datos del Cliente y Teléfono */}
       <View style={styles.clientSection}>
@@ -112,20 +132,42 @@ export const OrderCard = ({ order, onStatusChange, onViewDetail, isUpdating = fa
       <View style={styles.paymentSection}>
         <View style={styles.paymentMethodRow}>
           {payment?.method === PAYMENT_METHODS.EFECTIVO ? (
-            <View style={styles.paymentBadge}>
-              <Banknote size={14} color={THEME.colors.emerald800 || '#047857'} />
-              <Text style={styles.paymentMethodText}>Cobrar en Efectivo</Text>
+            <View>
+              <View style={styles.paymentBadge}>
+                <Banknote size={14} color={THEME.colors.emerald800 || '#047857'} />
+                <Text style={styles.paymentMethodText}>Cobrar en Efectivo</Text>
+              </View>
+              {payment?.change !== null && payment?.change !== undefined ? (
+                <Text style={styles.changeHint}>Llevar cambio de ${payment.change}</Text>
+              ) : null}
             </View>
           ) : (
-            <View style={styles.paymentBadgeTransfer}>
-              <CreditCard size={14} color={THEME.colors.slate700} />
-              <Text style={styles.paymentMethodText}>Transferencia</Text>
+            <View>
+              <View style={styles.paymentBadgeTransfer}>
+                <CreditCard size={14} color={THEME.colors.slate700} />
+                <Text style={styles.paymentMethodText}>Transferencia</Text>
+              </View>
+              {/* Estatus de la transferencia: solo lectura, sincronizado con la web */}
+              <View style={[
+                styles.transferStatusBadge,
+                payment?.transferStatus === 'aceptada'
+                  ? styles.transferAcceptedBadge
+                  : styles.transferPendingBadge,
+              ]}>
+                <Text style={[
+                  styles.transferStatusBadgeText,
+                  payment?.transferStatus === 'aceptada'
+                    ? styles.transferAcceptedBadgeText
+                    : styles.transferPendingBadgeText,
+                ]}>
+                  {payment?.transferStatus === 'aceptada'
+                    ? 'Transferencia: Aceptada ✓'
+                    : 'Transferencia: Pendiente ⏳'}
+                </Text>
+              </View>
+              <Text style={styles.readOnlyNote}>Validado en web (Solo lectura)</Text>
             </View>
           )}
-
-          {payment?.method === PAYMENT_METHODS.EFECTIVO && payment?.change !== null ? (
-            <Text style={styles.changeHint}>Llevar cambio de ${payment.change}</Text>
-          ) : null}
         </View>
 
         <View style={styles.totalRow}>
@@ -145,27 +187,50 @@ export const OrderCard = ({ order, onStatusChange, onViewDetail, isUpdating = fa
           <ChevronRight size={14} color={THEME.colors.slate600} />
         </TouchableOpacity>
 
-        {status === ORDER_STATUS.READY || status === ORDER_STATUS.PREPARING ? (
-          <Button
-            title="Iniciar Ruta"
-            variant="primary"
-            size="sm"
-            icon={Truck}
-            isLoading={isUpdating}
-            onPress={() => onStatusChange(id, ORDER_STATUS.ON_THE_WAY)}
-            style={styles.statusActionButton}
-          />
-        ) : status === ORDER_STATUS.ON_THE_WAY ? (
-          <Button
-            title="Marcar Entregado"
-            variant="success"
-            size="sm"
-            icon={CheckCircle2}
-            isLoading={isUpdating}
-            onPress={() => onStatusChange(id, ORDER_STATUS.DELIVERED)}
-            style={styles.statusActionButton}
-          />
-        ) : null}
+        {isLocked ? (
+          <View style={styles.lockedBadgeContainer}>
+            <Lock size={12} color={THEME.colors.slate500} />
+            <Text style={styles.lockedBadgeText}>Finalizado (Bloqueado)</Text>
+          </View>
+        ) : (
+          <View style={styles.activeActionsContainer}>
+            {onReportMissing && (
+              <TouchableOpacity
+                onPress={() => onReportMissing(order)}
+                activeOpacity={0.7}
+                style={styles.reportMissingBtn}
+              >
+                <AlertTriangle size={12} color="#BE123C" />
+                <Text style={styles.reportMissingBtnText}>Falta Algo</Text>
+              </TouchableOpacity>
+            )}
+
+            {status === ORDER_STATUS.ASSIGNED ||
+            status === ORDER_STATUS.READY ||
+            status === ORDER_STATUS.PENDING ||
+            status === ORDER_STATUS.MISSING_ITEMS ? (
+              <Button
+                title="Iniciar Ruta"
+                variant="primary"
+                size="sm"
+                icon={Truck}
+                isLoading={isUpdating}
+                onPress={() => onStatusChange(id, ORDER_STATUS.ON_THE_WAY)}
+                style={styles.statusActionButton}
+              />
+            ) : status === ORDER_STATUS.ON_THE_WAY ? (
+              <Button
+                title="Entregado"
+                variant="success"
+                size="sm"
+                icon={CheckCircle2}
+                isLoading={isUpdating}
+                onPress={() => onStatusChange(id, ORDER_STATUS.DELIVERED)}
+                style={styles.statusActionButton}
+              />
+            ) : null}
+          </View>
+        )}
       </View>
     </View>
   );
@@ -368,6 +433,101 @@ const styles = StyleSheet.create({
     color: THEME.colors.slate600,
   },
   statusActionButton: {
-    minWidth: 140,
+    minWidth: 120,
+  },
+  missingReportBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFE4E6',
+    borderWidth: 1,
+    borderColor: '#FDA4AF',
+    borderRadius: THEME.borderRadius.md,
+    padding: 8,
+    marginTop: 8,
+  },
+  missingReportContent: {
+    flex: 1,
+    marginLeft: 6,
+  },
+  missingReportTitle: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#9F1239',
+    textTransform: 'uppercase',
+  },
+  missingReportText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#881337',
+    marginTop: 1,
+  },
+  transferStatusBadge: {
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: THEME.borderRadius.sm,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+  },
+  transferAcceptedBadge: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#86EFAC',
+  },
+  transferPendingBadge: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#FCD34D',
+  },
+  transferStatusBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  transferAcceptedBadgeText: {
+    color: '#166534',
+  },
+  transferPendingBadgeText: {
+    color: '#92400E',
+  },
+  readOnlyNote: {
+    fontSize: 9,
+    color: THEME.colors.slate400,
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
+  lockedBadgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: THEME.colors.slate100,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: THEME.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: THEME.colors.slate200,
+  },
+  lockedBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: THEME.colors.slate500,
+  },
+  activeActionsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  reportMissingBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFF1F2',
+    borderWidth: 1,
+    borderColor: '#FDA4AF',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: THEME.borderRadius.sm,
+  },
+  reportMissingBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#BE123C',
   },
 });

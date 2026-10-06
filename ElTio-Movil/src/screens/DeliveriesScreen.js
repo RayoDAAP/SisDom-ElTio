@@ -15,6 +15,8 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Alert,
+  Modal,
+  TextInput,
 } from 'react-native';
 import {
   Truck,
@@ -23,6 +25,9 @@ import {
   AlertCircle,
   Inbox,
   ClipboardList,
+  AlertTriangle,
+  X,
+  Send,
 } from 'lucide-react-native';
 import { THEME } from '../config/theme';
 import { Header } from '../components/common/Header';
@@ -34,9 +39,10 @@ import { ORDER_STATUS } from '../models/order.model';
 
 // Agrupa los estados de pedido en dos categorías: activo vs. completado
 const ACTIVE_STATUSES = new Set([
+  ORDER_STATUS.MISSING_ITEMS,
   ORDER_STATUS.PENDING,
-  ORDER_STATUS.PREPARING,
   ORDER_STATUS.READY,
+  ORDER_STATUS.ASSIGNED,
   ORDER_STATUS.ON_THE_WAY,
 ]);
 
@@ -60,6 +66,12 @@ export const DeliveriesScreen = () => {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [updatingOrderId, setUpdatingOrderId] = useState(null);
 
+  // Estado para modal de reporte de producto faltante
+  const [missingModalVisible, setMissingModalVisible] = useState(false);
+  const [missingTargetOrder, setMissingTargetOrder] = useState(null);
+  const [missingNote, setMissingNote] = useState('');
+  const [submittingMissing, setSubmittingMissing] = useState(false);
+
   const loadDeliveries = useCallback(async () => {
     if (!token) return;
     try {
@@ -77,6 +89,18 @@ export const DeliveriesScreen = () => {
   useEffect(() => {
     loadDeliveries();
   }, [loadDeliveries]);
+
+  // Polling en segundo plano cada 3.5 segundos para reflejar actualizaciones de caja (transferencias aceptadas) en tiempo real
+  useEffect(() => {
+    if (!token) return;
+    const interval = setInterval(() => {
+      orderService
+        .getDeliveries(token, 'all')
+        .then((data) => setOrders(data))
+        .catch(() => {});
+    }, 3500);
+    return () => clearInterval(interval);
+  }, [token]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -97,6 +121,42 @@ export const DeliveriesScreen = () => {
       Alert.alert('Error', err.message || 'No se pudo actualizar el estado de la entrega');
     } finally {
       setUpdatingOrderId(null);
+    }
+  };
+
+  const handleOpenReportMissing = (order) => {
+    setMissingTargetOrder(order);
+    setMissingNote('');
+    setMissingModalVisible(true);
+  };
+
+  const handleSubmitReportMissing = async () => {
+    if (!missingNote.trim()) {
+      Alert.alert('Aviso', 'Por favor describe qué producto o complemento hace falta.');
+      return;
+    }
+    setSubmittingMissing(true);
+    try {
+      const updated = await orderService.reportMissing(
+        token,
+        missingTargetOrder.id,
+        missingNote.trim()
+      );
+      setOrders((prev) =>
+        prev.map((o) => (o.id === updated.id ? updated : o))
+      );
+      if (selectedOrder && selectedOrder.id === updated.id) {
+        setSelectedOrder(updated);
+      }
+      setMissingModalVisible(false);
+      Alert.alert(
+        'Faltante Reportado',
+        'El pedido fue puesto en estatus de máxima prioridad para atención en cocina.'
+      );
+    } catch (err) {
+      Alert.alert('Error', err.message || 'No se pudo enviar el reporte');
+    } finally {
+      setSubmittingMissing(false);
     }
   };
 
@@ -225,6 +285,7 @@ export const DeliveriesScreen = () => {
               order={item}
               onStatusChange={handleStatusChange}
               onViewDetail={(ord) => setSelectedOrder(ord)}
+              onReportMissing={handleOpenReportMissing}
               isUpdating={updatingOrderId === item.id}
             />
           )}
@@ -249,9 +310,85 @@ export const DeliveriesScreen = () => {
           visible={!!selectedOrder}
           onClose={() => setSelectedOrder(null)}
           onStatusChange={handleStatusChange}
+          onReportMissing={handleOpenReportMissing}
           isUpdating={updatingOrderId === selectedOrder.id}
         />
       )}
+
+      {/* Modal Interactivo para Reportar Faltante en Pedido */}
+      <Modal
+        visible={missingModalVisible}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => !submittingMissing && setMissingModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.missingModalContent}>
+            <View style={styles.missingModalHeader}>
+              <View style={styles.missingModalTitleRow}>
+                <AlertTriangle size={20} color="#BE123C" />
+                <Text style={styles.missingModalTitle}>Reportar Faltante</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => !submittingMissing && setMissingModalVisible(false)}
+                disabled={submittingMissing}
+                style={styles.missingModalCloseBtn}
+              >
+                <X size={18} color={THEME.colors.slate600} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.missingModalBody}>
+              <Text style={styles.missingOrderInfo}>
+                Pedido: <Text style={{ fontWeight: '800' }}>{missingTargetOrder?.id}</Text> — {missingTargetOrder?.client?.name}
+              </Text>
+              <View style={styles.missingAlertHint}>
+                <Text style={styles.missingAlertHintText}>
+                  Este reporte pondrá la orden con Máxima Prioridad en el panel web de cocina para atención inmediata.
+                </Text>
+              </View>
+
+              <Text style={styles.inputLabel}>¿Qué producto o complemento hace falta?</Text>
+              <TextInput
+                style={styles.missingTextInput}
+                placeholder="Ej. Faltan 2 tacos de barbacoa, falta la salsa verde y el refresco..."
+                placeholderTextColor={THEME.colors.slate400}
+                value={missingNote}
+                onChangeText={setMissingNote}
+                multiline={true}
+                numberOfLines={3}
+                textAlignVertical="top"
+                editable={!submittingMissing}
+              />
+            </View>
+
+            <View style={styles.missingModalFooter}>
+              <TouchableOpacity
+                onPress={() => setMissingModalVisible(false)}
+                disabled={submittingMissing}
+                style={styles.missingCancelBtn}
+              >
+                <Text style={styles.missingCancelBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleSubmitReportMissing}
+                disabled={submittingMissing}
+                style={[styles.missingSubmitBtn, submittingMissing && { opacity: 0.6 }]}
+              >
+                {submittingMissing ? (
+                  <ActivityIndicator size="small" color={THEME.colors.white} />
+                ) : (
+                  <>
+                    <Send size={14} color={THEME.colors.white} />
+                    <Text style={styles.missingSubmitBtnText}>Enviar Reporte</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -367,5 +504,121 @@ const styles = StyleSheet.create({
     color: THEME.colors.error,
     fontWeight: '600',
     flex: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  missingModalContent: {
+    backgroundColor: THEME.colors.white,
+    borderRadius: THEME.borderRadius.xl,
+    width: '100%',
+    maxWidth: 400,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#FDA4AF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  missingModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#FFF1F2',
+    borderBottomWidth: 1,
+    borderBottomColor: '#FDA4AF',
+  },
+  missingModalTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  missingModalTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#9F1239',
+  },
+  missingModalCloseBtn: {
+    padding: 4,
+  },
+  missingModalBody: {
+    padding: 16,
+  },
+  missingOrderInfo: {
+    fontSize: 13,
+    color: THEME.colors.slate700,
+    marginBottom: 8,
+  },
+  missingAlertHint: {
+    backgroundColor: '#FFE4E6',
+    padding: 10,
+    borderRadius: THEME.borderRadius.md,
+    borderWidth: 1,
+    borderColor: '#FDA4AF',
+    marginBottom: 12,
+  },
+  missingAlertHintText: {
+    fontSize: 11,
+    color: '#881337',
+    fontWeight: '600',
+    lineHeight: 15,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: THEME.colors.slate800,
+    marginBottom: 6,
+  },
+  missingTextInput: {
+    backgroundColor: THEME.colors.slate50,
+    borderWidth: 1,
+    borderColor: THEME.colors.slate300,
+    borderRadius: THEME.borderRadius.md,
+    padding: 10,
+    fontSize: 13,
+    color: THEME.colors.slate900,
+    minHeight: 80,
+  },
+  missingModalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 10,
+    padding: 14,
+    backgroundColor: THEME.colors.slate50,
+    borderTopWidth: 1,
+    borderTopColor: THEME.colors.slate200,
+  },
+  missingCancelBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: THEME.borderRadius.md,
+  },
+  missingCancelBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: THEME.colors.slate600,
+  },
+  missingSubmitBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#BE123C',
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: THEME.borderRadius.md,
+  },
+  missingSubmitBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: THEME.colors.white,
   },
 });

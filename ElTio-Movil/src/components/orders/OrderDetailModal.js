@@ -28,6 +28,8 @@ import {
   Soup,
   Flame,
   Coffee,
+  AlertTriangle,
+  Lock,
 } from 'lucide-react-native';
 import { THEME } from '../../config/theme';
 import { Badge } from '../common/Badge';
@@ -39,12 +41,14 @@ export const OrderDetailModal = ({
   visible,
   onClose,
   onStatusChange,
+  onReportMissing,
   isUpdating = false,
 }) => {
   if (!order) return null;
 
-  const { id, client, items, pricing, status, payment, notes, createdAt } = order;
+  const { id, client, items, pricing, status, payment, notes, createdAt, missingReport } = order;
   const statusCfg = ORDER_STATUS_CONFIG[status] || ORDER_STATUS_CONFIG[ORDER_STATUS.PENDING];
+  const isLocked = status === ORDER_STATUS.DELIVERED || status === ORDER_STATUS.CANCELLED;
   const fullAddress = `Calle ${client?.street || ''} #${client?.number || ''}, Col. ${client?.colonia || ''}`;
 
   const handleCall = () => {
@@ -76,6 +80,20 @@ export const OrderDetailModal = ({
             <Text style={styles.sectionLabel}>Estado de la Orden</Text>
             <Badge label={statusCfg.label} colors={statusCfg.colors} style={styles.statusBadge} />
           </View>
+
+          {/* Reporte de Faltante si existe */}
+          {missingReport ? (
+            <View style={styles.missingReportCard}>
+              <AlertTriangle size={18} color="#9F1239" />
+              <View style={styles.missingReportCardContent}>
+                <Text style={styles.missingReportCardTitle}>Faltante Reportado (Urgente):</Text>
+                <Text style={styles.missingReportCardText}>{missingReport.note}</Text>
+                <Text style={styles.missingReportCardMeta}>
+                  Reportado: {new Date(missingReport.reportedAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                </Text>
+              </View>
+            </View>
+          ) : null}
 
           {/* Información del Cliente */}
           <View style={styles.sectionCard}>
@@ -233,9 +251,31 @@ export const OrderDetailModal = ({
                   ) : null}
                 </View>
               ) : (
-                <Text style={styles.transferStateText}>
-                  Estado: {payment?.transferStatus === 'aceptada' ? 'Validada' : 'Pendiente'}
-                </Text>
+                <View style={styles.transferStateContainer}>
+                  <View style={[
+                    styles.transferStatePill,
+                    payment?.transferStatus === 'aceptada'
+                      ? styles.transferStateAccepted
+                      : styles.transferStatePending
+                  ]}>
+                    <Text style={[
+                      styles.transferStatePillText,
+                      payment?.transferStatus === 'aceptada'
+                        ? styles.transferStateAcceptedText
+                        : styles.transferStatePendingText
+                    ]}>
+                      {payment?.transferStatus === 'aceptada'
+                        ? 'Transferencia: Aceptada ✓'
+                        : 'Transferencia: Pendiente de Confirmar ⏳'}
+                    </Text>
+                  </View>
+                  <Text style={styles.transferStateHint}>
+                    {payment?.transferStatus === 'aceptada'
+                      ? 'Pago validado en sucursal · Entregar pedido al cliente'
+                      : 'Aún no validada por caja · No entregar sin confirmación'}
+                  </Text>
+                  <Text style={styles.transferStateSync}>Solo lectura · Sincronizado en tiempo real</Text>
+                </View>
               )}
             </View>
 
@@ -248,42 +288,57 @@ export const OrderDetailModal = ({
 
         {/* Acciones Inferiores del Modal */}
         <View style={styles.footer}>
-          {status !== ORDER_STATUS.DELIVERED && status !== ORDER_STATUS.CANCELLED ? (
-            status === ORDER_STATUS.ON_THE_WAY ? (
-              <Button
-                title="Marcar como Entregado"
-                variant="success"
-                size="lg"
-                icon={CheckCircle2}
-                isLoading={isUpdating}
-                onPress={() => {
-                  onStatusChange(id, ORDER_STATUS.DELIVERED);
-                  onClose();
-                }}
-                style={styles.fullWidthButton}
-              />
-            ) : (
-              <Button
-                title="Iniciar Ruta de Entrega"
-                variant="primary"
-                size="lg"
-                icon={Truck}
-                isLoading={isUpdating}
-                onPress={() => {
-                  onStatusChange(id, ORDER_STATUS.ON_THE_WAY);
-                  onClose();
-                }}
-                style={styles.fullWidthButton}
-              />
-            )
+          {!isLocked ? (
+            <View style={styles.footerActionsContainer}>
+              {onReportMissing && (
+                <TouchableOpacity
+                  onPress={() => {
+                    onClose();
+                    onReportMissing(order);
+                  }}
+                  activeOpacity={0.7}
+                  style={styles.modalReportMissingBtn}
+                >
+                  <AlertTriangle size={14} color="#9F1239" />
+                  <Text style={styles.modalReportMissingBtnText}>Reportar Faltante</Text>
+                </TouchableOpacity>
+              )}
+
+              {status === ORDER_STATUS.ON_THE_WAY ? (
+                <Button
+                  title="Marcar como Entregado"
+                  variant="success"
+                  size="lg"
+                  icon={CheckCircle2}
+                  isLoading={isUpdating}
+                  onPress={() => {
+                    onStatusChange(id, ORDER_STATUS.DELIVERED);
+                    onClose();
+                  }}
+                  style={styles.modalActionButton}
+                />
+              ) : (
+                <Button
+                  title="Iniciar Ruta de Entrega"
+                  variant="primary"
+                  size="lg"
+                  icon={Truck}
+                  isLoading={isUpdating}
+                  onPress={() => {
+                    onStatusChange(id, ORDER_STATUS.ON_THE_WAY);
+                    onClose();
+                  }}
+                  style={styles.modalActionButton}
+                />
+              )}
+            </View>
           ) : (
-            <Button
-              title="Cerrar Detalle"
-              variant="outline"
-              size="md"
-              onPress={onClose}
-              style={styles.fullWidthButton}
-            />
+            <View style={styles.modalLockedContainer}>
+              <Lock size={14} color={THEME.colors.slate500} />
+              <Text style={styles.modalLockedText}>
+                Pedido finalizado ({statusCfg.label}) — Estado bloqueado
+              </Text>
+            </View>
           )}
         </View>
       </SafeAreaView>
@@ -544,5 +599,116 @@ const styles = StyleSheet.create({
   },
   fullWidthButton: {
     width: '100%',
+  },
+  missingReportCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFE4E6',
+    borderWidth: 1.5,
+    borderColor: '#FDA4AF',
+    borderRadius: THEME.borderRadius.md,
+    padding: 12,
+    marginBottom: THEME.spacing.md,
+  },
+  missingReportCardContent: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  missingReportCardTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#9F1239',
+    textTransform: 'uppercase',
+  },
+  missingReportCardText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#881337',
+    marginTop: 2,
+  },
+  missingReportCardMeta: {
+    fontSize: 10,
+    color: '#BE123C',
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  transferStateContainer: {
+    marginTop: 6,
+  },
+  transferStatePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: THEME.borderRadius.sm,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    marginBottom: 4,
+  },
+  transferStateAccepted: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#86EFAC',
+  },
+  transferStatePending: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#FCD34D',
+  },
+  transferStatePillText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  transferStateAcceptedText: {
+    color: '#166534',
+  },
+  transferStatePendingText: {
+    color: '#92400E',
+  },
+  transferStateHint: {
+    fontSize: 11,
+    color: THEME.colors.slate700,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  transferStateSync: {
+    fontSize: 9,
+    color: THEME.colors.slate400,
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
+  footerActionsContainer: {
+    gap: 8,
+  },
+  modalReportMissingBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#FFF1F2',
+    borderWidth: 1,
+    borderColor: '#FDA4AF',
+    paddingVertical: 10,
+    borderRadius: THEME.borderRadius.md,
+  },
+  modalReportMissingBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#9F1239',
+  },
+  modalActionButton: {
+    width: '100%',
+  },
+  modalLockedContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: THEME.colors.slate100,
+    paddingVertical: 12,
+    borderRadius: THEME.borderRadius.md,
+    borderWidth: 1,
+    borderColor: THEME.colors.slate200,
+  },
+  modalLockedText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: THEME.colors.slate500,
   },
 });

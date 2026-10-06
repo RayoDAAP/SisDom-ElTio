@@ -48,3 +48,24 @@ export const assignOrderRequest = async (orderId, driverId) => {
   const response = await api.patch(`/orders/${orderId}/assign`, { driverId });
   return response.data.data.order;
 };
+
+/**
+ * Actualiza el estado de una transferencia bancaria (pendiente / aceptada).
+ * @param {string} orderId
+ * @param {'pendiente' | 'aceptada'} transferStatus
+ */
+export const updatePaymentStatusRequest = async (orderId, transferStatus) => {
+  const response = await api.patch(`/orders/${orderId}/payment-status`, { transferStatus });
+  return response.data.data.order;
+};
+
+/**
+ * Reporta un faltante en el pedido (estatus 'incompleto').
+ * @param {string} orderId
+ * @param {string} note
+ */
+export const reportMissingRequest = async (orderId, note) => {
+  const response = await api.post(`/orders/${orderId}/report-missing`, { note });
+  return response.data.data.order;
+};
+

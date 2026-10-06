@@ -18,6 +18,8 @@ import {
   Loader2,
   ShieldCheck,
   ClipboardList,
+  Lock,
+  AlertTriangle,
 } from 'lucide-react';
 import useAuth from '../hooks/useAuth';
 import Logo from '../components/common/Logo';
@@ -55,6 +57,12 @@ const UserDashboard = () => {
 
   useEffect(() => {
     loadOrders();
+    const interval = setInterval(() => {
+      fetchOrders('day')
+        .then((data) => setOrders(data))
+        .catch(() => {});
+    }, 4000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleStatusChange = async (orderId, newStatus) => {
@@ -212,18 +220,26 @@ const UserDashboard = () => {
                         </td>
                         <td className="p-3.5 font-medium">{order.client?.phone}</td>
                         <td className="p-3.5">
-                          <select
-                            value={order.status}
-                            onChange={(e) => handleStatusChange(order.id, e.target.value)}
-                            className={`text-xs font-bold px-2.5 py-1 rounded-lg border cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-400 ${statusConfig.badgeClass}`}
-                          >
-                            <option value="pendiente">Pendiente</option>
-                            <option value="en_preparacion">En Preparación</option>
-                            <option value="listo">Listo</option>
-                            <option value="en_camino">En Camino</option>
-                            <option value="entregado">Entregado</option>
-                            <option value="cancelado">Cancelado</option>
-                          </select>
+                          {order.status === 'entregado' || order.status === 'cancelado' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                              <Lock className="w-3 h-3 text-slate-400" />
+                              <span>{statusConfig.label}</span>
+                            </span>
+                          ) : (
+                            <select
+                              value={order.status}
+                              onChange={(e) => handleStatusChange(order.id, e.target.value)}
+                              className={`text-xs font-bold px-2.5 py-1 rounded-lg border cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-400 ${statusConfig.badgeClass}`}
+                            >
+                              <option value="incompleto">Faltante (Urgente)</option>
+                              <option value="pendiente">Pendiente</option>
+                              <option value="listo">Listo</option>
+                              <option value="asignado">Asignado</option>
+                              <option value="en_camino">En Camino</option>
+                              <option value="entregado">Entregado</option>
+                              <option value="cancelado">Cancelado</option>
+                            </select>
+                          )}
                         </td>
                         <td className="p-3.5 text-right">
                           <Button

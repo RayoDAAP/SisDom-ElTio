@@ -5,9 +5,10 @@
  */
 
 export const ORDER_STATUS = {
+  MISSING_ITEMS: 'incompleto', // Máxima prioridad por reporte de faltante
   PENDING: 'pendiente',
-  PREPARING: 'en_preparacion',
   READY: 'listo',
+  ASSIGNED: 'asignado', // Asignado a repartidor
   ON_THE_WAY: 'en_camino',
   DELIVERED: 'entregado',
   CANCELLED: 'cancelado',
@@ -18,7 +19,7 @@ export const orderStore = [
   {
     id: 'PED-1001',
     createdAt: new Date().toISOString(),
-    status: ORDER_STATUS.PREPARING,
+    status: ORDER_STATUS.ASSIGNED,
     createdBy: 'Auxiliar de Pedidos',
     client: {
       type: 'particular',

@@ -60,34 +60,39 @@ export const TRANSFER_STATUS = {
 };
 
 export const ORDER_STATUS_CONFIG = {
+  incompleto: {
+    label: 'Faltante (Urgente)',
+    badgeClass: 'bg-rose-100 text-rose-900 border-rose-400 font-black ring-1 ring-rose-400',
+    icon: 'AlertTriangle',
+  },
   pendiente: {
     label: 'Pendiente',
-    badgeClass: 'bg-amber-100 text-amber-900 border-amber-300',
+    badgeClass: 'bg-amber-100 text-amber-900 border-amber-300 font-bold',
     icon: 'Clock',
-  },
-  en_preparacion: {
-    label: 'En Preparación',
-    badgeClass: 'bg-sky-100 text-sky-900 border-sky-300',
-    icon: 'ChefHat',
   },
   listo: {
     label: 'Listo para Entrega',
-    badgeClass: 'bg-emerald-100 text-emerald-900 border-emerald-300',
+    badgeClass: 'bg-emerald-100 text-emerald-900 border-emerald-300 font-bold',
     icon: 'CheckCircle2',
+  },
+  asignado: {
+    label: 'Asignado a Repartidor',
+    badgeClass: 'bg-blue-100 text-blue-900 border-blue-300 font-bold',
+    icon: 'UserCheck',
   },
   en_camino: {
     label: 'En Camino',
-    badgeClass: 'bg-purple-100 text-purple-900 border-purple-300',
+    badgeClass: 'bg-purple-100 text-purple-900 border-purple-300 font-bold',
     icon: 'Truck',
   },
   entregado: {
     label: 'Entregado',
-    badgeClass: 'bg-green-100 text-green-900 border-green-300',
+    badgeClass: 'bg-green-100 text-green-900 border-green-300 font-bold',
     icon: 'CheckCheck',
   },
   cancelado: {
     label: 'Cancelado',
-    badgeClass: 'bg-red-100 text-red-900 border-red-300',
+    badgeClass: 'bg-slate-100 text-slate-800 border-slate-300 font-bold',
     icon: 'XCircle',
   },
 };
