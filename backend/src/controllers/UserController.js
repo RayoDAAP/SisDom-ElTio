@@ -69,3 +69,17 @@ export const toggleUserStatus = (req, res) => {
     return sendError(res, 400, error.message);
   }
 };
+
+/**
+ * GET /api/users/drivers
+ * Retorna la lista de repartidores activos disponibles para asignación.
+ * Accesible para el rol Administrador.
+ */
+export const listActiveDrivers = (req, res) => {
+  try {
+    const drivers = UserService.listActiveDrivers();
+    return sendSuccess(res, 200, 'Repartidores activos obtenidos', { drivers });
+  } catch (error) {
+    return sendError(res, 500, error.message);
+  }
+};

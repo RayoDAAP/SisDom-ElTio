@@ -1,8 +1,9 @@
 /**
  * @module DeliveriesScreen
- * @description Pantalla principal de repartidores con lista de entregas activas,
- *              filtrado por estados (En Ruta, Entregados, Todos), pull-to-refresh
- *              y modal para visualización detallada.
+ * @description Pantalla principal de repartidores. Muestra únicamente los pedidos
+ *              asignados al repartidor autenticado (filtrado en el backend por rol).
+ *              Separación clara entre pedidos activos (pendiente, en_preparacion, listo, en_camino)
+ *              y completados (entregado, cancelado) para evitar saturar la vista de trabajo.
  */
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
@@ -19,10 +20,9 @@ import {
   Truck,
   CheckCircle2,
   Package,
-  Clock,
   AlertCircle,
   Inbox,
-  Filter,
+  ClipboardList,
 } from 'lucide-react-native';
 import { THEME } from '../config/theme';
 import { Header } from '../components/common/Header';
@@ -32,6 +32,19 @@ import { orderService } from '../services/orderService';
 import { useAuth } from '../context/AuthContext';
 import { ORDER_STATUS } from '../models/order.model';
 
+// Agrupa los estados de pedido en dos categorías: activo vs. completado
+const ACTIVE_STATUSES = new Set([
+  ORDER_STATUS.PENDING,
+  ORDER_STATUS.PREPARING,
+  ORDER_STATUS.READY,
+  ORDER_STATUS.ON_THE_WAY,
+]);
+
+const COMPLETED_STATUSES = new Set([
+  ORDER_STATUS.DELIVERED,
+  ORDER_STATUS.CANCELLED,
+]);
+
 export const DeliveriesScreen = () => {
   const { token } = useAuth();
 
@@ -40,7 +53,7 @@ export const DeliveriesScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Filtro de pestaña activa: 'active' | 'delivered' | 'all'
+  // Filtro de pestaña activa: 'active' | 'completed' | 'all'
   const [activeTab, setActiveTab] = useState('active');
 
   // Estado para el modal de detalle y actualización
@@ -90,50 +103,39 @@ export const DeliveriesScreen = () => {
   // Filtrar pedidos según la pestaña seleccionada
   const filteredOrders = useMemo(() => {
     if (activeTab === 'active') {
-      return orders.filter(
-        (o) =>
-          o.status === ORDER_STATUS.ON_THE_WAY ||
-          o.status === ORDER_STATUS.READY ||
-          o.status === ORDER_STATUS.PREPARING ||
-          o.status === ORDER_STATUS.PENDING
-      );
+      return orders.filter((o) => ACTIVE_STATUSES.has(o.status));
     }
-    if (activeTab === 'delivered') {
-      return orders.filter((o) => o.status === ORDER_STATUS.DELIVERED);
+    if (activeTab === 'completed') {
+      return orders.filter((o) => COMPLETED_STATUSES.has(o.status));
     }
     return orders;
   }, [orders, activeTab]);
 
   // Contadores para insignias de pestañas
   const counts = useMemo(() => {
-    const active = orders.filter(
-      (o) =>
-        o.status === ORDER_STATUS.ON_THE_WAY ||
-        o.status === ORDER_STATUS.READY ||
-        o.status === ORDER_STATUS.PREPARING ||
-        o.status === ORDER_STATUS.PENDING
-    ).length;
-    const delivered = orders.filter((o) => o.status === ORDER_STATUS.DELIVERED).length;
-    return { active, delivered, total: orders.length };
+    const active = orders.filter((o) => ACTIVE_STATUSES.has(o.status)).length;
+    const completed = orders.filter((o) => COMPLETED_STATUSES.has(o.status)).length;
+    return { active, completed, total: orders.length };
   }, [orders]);
 
-  const renderEmptyState = () => (
-    <View style={styles.emptyContainer}>
-      <View style={styles.emptyIconCircle}>
-        <Inbox size={32} color={THEME.colors.slate400} />
+  const emptyMessages = {
+    active: { title: 'Sin entregas activas', sub: 'Desliza hacia abajo para buscar nuevas órdenes asignadas' },
+    completed: { title: 'Sin entregas completadas', sub: 'Las órdenes finalizadas o canceladas aparecerán aquí' },
+    all: { title: 'Sin pedidos', sub: 'Desliza hacia abajo para actualizar' },
+  };
+
+  const renderEmptyState = () => {
+    const msg = emptyMessages[activeTab];
+    return (
+      <View style={styles.emptyContainer}>
+        <View style={styles.emptyIconCircle}>
+          <Inbox size={32} color={THEME.colors.slate400} />
+        </View>
+        <Text style={styles.emptyTitle}>{msg.title}</Text>
+        <Text style={styles.emptySubtitle}>{msg.sub}</Text>
       </View>
-      <Text style={styles.emptyTitle}>
-        {activeTab === 'active'
-          ? 'No hay entregas pendientes'
-          : activeTab === 'delivered'
-          ? 'Sin entregas completadas hoy'
-          : 'No se encontraron pedidos'}
-      </Text>
-      <Text style={styles.emptySubtitle}>
-        Desliza hacia abajo para actualizar y comprobar nuevas órdenes
-      </Text>
-    </View>
-  );
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -147,8 +149,9 @@ export const DeliveriesScreen = () => {
           style={[styles.tabButton, activeTab === 'active' && styles.tabButtonActive]}
           activeOpacity={0.7}
         >
+          <Truck size={13} color={activeTab === 'active' ? THEME.colors.white : THEME.colors.slate600} style={{ marginRight: 5 }} />
           <Text style={[styles.tabText, activeTab === 'active' && styles.tabTextActive]}>
-            En Ruta / Pendientes
+            En Ruta
           </Text>
           <View
             style={[styles.counterBadge, activeTab === 'active' && styles.counterBadgeActive]}
@@ -165,23 +168,24 @@ export const DeliveriesScreen = () => {
         </TouchableOpacity>
 
         <TouchableOpacity
-          onPress={() => setActiveTab('delivered')}
-          style={[styles.tabButton, activeTab === 'delivered' && styles.tabButtonActive]}
+          onPress={() => setActiveTab('completed')}
+          style={[styles.tabButton, activeTab === 'completed' && styles.tabButtonActive]}
           activeOpacity={0.7}
         >
-          <Text style={[styles.tabText, activeTab === 'delivered' && styles.tabTextActive]}>
-            Entregados
+          <CheckCircle2 size={13} color={activeTab === 'completed' ? THEME.colors.white : THEME.colors.slate600} style={{ marginRight: 5 }} />
+          <Text style={[styles.tabText, activeTab === 'completed' && styles.tabTextActive]}>
+            Completados
           </Text>
           <View
-            style={[styles.counterBadge, activeTab === 'delivered' && styles.counterBadgeActive]}
+            style={[styles.counterBadge, activeTab === 'completed' && styles.counterBadgeActive]}
           >
             <Text
               style={[
                 styles.counterText,
-                activeTab === 'delivered' && styles.counterTextActive,
+                activeTab === 'completed' && styles.counterTextActive,
               ]}
             >
-              {counts.delivered}
+              {counts.completed}
             </Text>
           </View>
         </TouchableOpacity>
@@ -191,6 +195,7 @@ export const DeliveriesScreen = () => {
           style={[styles.tabButton, activeTab === 'all' && styles.tabButtonActive]}
           activeOpacity={0.7}
         >
+          <ClipboardList size={13} color={activeTab === 'all' ? THEME.colors.white : THEME.colors.slate600} style={{ marginRight: 5 }} />
           <Text style={[styles.tabText, activeTab === 'all' && styles.tabTextActive]}>
             Todos
           </Text>

@@ -9,6 +9,7 @@ import {
   createUser,
   changePassword,
   toggleUserStatus,
+  listActiveDrivers,
 } from '../controllers/UserController.js';
 import { authenticate, authorize } from '../middleware/authMiddleware.js';
 import { USER_ROLES } from '../models/User.js';
@@ -17,6 +18,9 @@ const router = Router();
 
 // Todas las rutas requieren sesión activa y rol de Administrador
 router.use(authenticate, authorize(USER_ROLES.ADMIN));
+
+// Debe ir ANTES de la ruta /:id para que no se interprete como un ID
+router.get('/drivers', listActiveDrivers);
 
 router.get('/', listUsers);
 router.post('/', createUser);

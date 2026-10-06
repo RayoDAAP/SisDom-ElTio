@@ -6,7 +6,7 @@
  *              3. Cuentas: Gestión de personal con roles (Admin, Auxiliar, Repartidor), claves y estados.
  *              Construido bajo estándar Senior con Tailwind CSS y Lucide React.
  */
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Package,
   DollarSign,
@@ -24,6 +24,8 @@ import {
   Search,
   BarChart3,
   Users,
+  Truck,
+  UserCheck,
 } from 'lucide-react';
 import useAuth from '../hooks/useAuth';
 import Logo from '../components/common/Logo';
@@ -36,7 +38,9 @@ import {
   fetchOrders,
   createOrderRequest,
   updateOrderStatusRequest,
+  assignOrderRequest,
 } from '../services/orderService';
+import { fetchActiveDrivers } from '../services/userService';
 import { ORDER_STATUS_CONFIG } from '../models/order.model';
 
 const AdminDashboard = () => {
@@ -49,6 +53,11 @@ const AdminDashboard = () => {
   const [dateRange, setDateRange] = useState('day'); // 'day' | 'week' | 'month' | 'all'
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+
+  // Repartidores activos para el selector de asignación
+  const [activeDrivers, setActiveDrivers] = useState([]);
+  // ID del pedido que está siendo asignado (para deshabilitar el select mientras carga)
+  const [assigningOrderId, setAssigningOrderId] = useState(null);
 
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -65,9 +74,23 @@ const AdminDashboard = () => {
     }
   };
 
+  const loadDrivers = useCallback(async () => {
+    try {
+      const drivers = await fetchActiveDrivers();
+      setActiveDrivers(drivers);
+    } catch {
+      // No crítico — si falla, el select de asignación no tendrá opciones
+    }
+  }, []);
+
   useEffect(() => {
     loadOrders(dateRange);
   }, [dateRange]);
+
+  // Cargar repartidores activos al montar y cuando se cambia a la pestaña de pedidos
+  useEffect(() => {
+    loadDrivers();
+  }, [loadDrivers]);
 
   const handleStatusChange = async (orderId, newStatus) => {
     try {
@@ -80,6 +103,26 @@ const AdminDashboard = () => {
       }
     } catch (err) {
       alert('Error al actualizar el estado: ' + err.message);
+    }
+  };
+
+  const handleAssignDriver = async (orderId, driverIdStr) => {
+    // El valor del select llega como string; null string indica "sin asignar"
+    const driverId = driverIdStr === '' ? null : Number(driverIdStr);
+    setAssigningOrderId(orderId);
+    try {
+      const updated = await assignOrderRequest(orderId, driverId);
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === orderId
+            ? { ...o, assignedTo: updated.assignedTo, assignedToName: updated.assignedToName, assignedAt: updated.assignedAt }
+            : o
+        )
+      );
+    } catch (err) {
+      alert('Error al asignar repartidor: ' + err.message);
+    } finally {
+      setAssigningOrderId(null);
     }
   };
 
@@ -364,6 +407,7 @@ const AdminDashboard = () => {
                         <th className="p-3.5">Teléfono</th>
                         <th className="p-3.5">Total</th>
                         <th className="p-3.5">Estado</th>
+                        <th className="p-3.5">Repartidor</th>
                         <th className="p-3.5 text-right">Acciones</th>
                       </tr>
                     </thead>
@@ -371,6 +415,7 @@ const AdminDashboard = () => {
                       {filteredOrders.map((order) => {
                         const statusConfig =
                           ORDER_STATUS_CONFIG[order.status] || ORDER_STATUS_CONFIG.pendiente;
+                        const isAssigning = assigningOrderId === order.id;
 
                         return (
                           <tr key={order.id} className="hover:bg-slate-50/80 transition-colors">
@@ -421,6 +466,39 @@ const AdminDashboard = () => {
                                 <option value="entregado">Entregado</option>
                                 <option value="cancelado">Cancelado</option>
                               </select>
+                            </td>
+                            {/* Selector de repartidor — solo muestra cuentas activas */}
+                            <td className="p-3.5 min-w-[160px]">
+                              {activeDrivers.length === 0 ? (
+                                <span className="text-slate-400 text-[11px]">Sin repartidores</span>
+                              ) : (
+                                <div className="flex items-center gap-1.5">
+                                  {order.assignedTo ? (
+                                    <UserCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                  ) : (
+                                    <Truck className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  )}
+                                  <select
+                                    value={order.assignedTo ?? ''}
+                                    onChange={(e) => handleAssignDriver(order.id, e.target.value)}
+                                    disabled={isAssigning}
+                                    className={`text-xs px-2 py-1 rounded-lg border bg-white focus:outline-none focus:ring-2 focus:ring-brand-red/20 focus:border-brand-red cursor-pointer w-full ${
+                                      isAssigning ? 'opacity-50 cursor-not-allowed' : ''
+                                    } ${
+                                      order.assignedTo
+                                        ? 'border-emerald-300 text-emerald-700 font-semibold'
+                                        : 'border-slate-200 text-slate-500'
+                                    }`}
+                                  >
+                                    <option value="">Sin asignar</option>
+                                    {activeDrivers.map((d) => (
+                                      <option key={d.id} value={d.id}>
+                                        {d.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              )}
                             </td>
                             <td className="p-3.5 text-right">
                               <Button

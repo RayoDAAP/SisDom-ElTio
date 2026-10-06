@@ -60,3 +60,15 @@ export const toggleUserStatusRequest = async (userId, isActive) => {
   );
   return response.data.data.user;
 };
+
+/**
+ * Obtiene la lista de repartidores con cuenta activa.
+ * Usado para el selector de asignación de pedidos.
+ * @returns {Promise<Array>}
+ */
+export const fetchActiveDrivers = async () => {
+  const response = await axios.get(`${API_URL}/users/drivers`, {
+    headers: authHeader(),
+  });
+  return response.data.data.drivers;
+};

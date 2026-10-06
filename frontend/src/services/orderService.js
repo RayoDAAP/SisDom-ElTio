@@ -38,3 +38,13 @@ export const updateOrderStatusRequest = async (id, status) => {
   const response = await api.patch(`/orders/${id}/status`, { status });
   return response.data.data.order;
 };
+
+/**
+ * Asigna (o desasigna) un repartidor activo a un pedido.
+ * @param {string} orderId
+ * @param {number|null} driverId - null para desasignar
+ */
+export const assignOrderRequest = async (orderId, driverId) => {
+  const response = await api.patch(`/orders/${orderId}/assign`, { driverId });
+  return response.data.data.order;
+};

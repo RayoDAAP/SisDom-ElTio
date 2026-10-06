@@ -97,3 +97,13 @@ export const setUserActiveStatus = (userId, isActive) => {
 
   return toggleUserStatusInStore(userId, isActive);
 };
+
+/**
+ * Retorna los repartidores con cuenta activa disponibles para asignación de pedidos.
+ * @returns {Array<object>}
+ */
+export const listActiveDrivers = () => {
+  return getAllUsers().filter(
+    (u) => u.role === USER_ROLES.REPARTIDOR && u.isActive === true
+  );
+};

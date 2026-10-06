@@ -67,3 +67,19 @@ export const updateOrderStatus = (req, res) => {
     return sendError(res, 400, error.message);
   }
 };
+
+/**
+ * PATCH /api/orders/:id/assign
+ * Asigna o desasigna un repartidor activo al pedido.
+ * Solo accesible para el rol Administrador.
+ */
+export const assignOrder = (req, res) => {
+  try {
+    const { driverId } = req.body;
+    // driverId puede ser null para desasignar
+    const updatedOrder = OrderService.assignOrder(req.params.id, driverId ?? null);
+    return sendSuccess(res, 200, 'Pedido asignado correctamente', { order: updatedOrder });
+  } catch (error) {
+    return sendError(res, 400, error.message);
+  }
+};

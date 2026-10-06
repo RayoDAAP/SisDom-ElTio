@@ -48,7 +48,15 @@ export const orderStore = [
       shippingFee: 40,
       total: 340,
     },
+    payment: {
+      method: 'efectivo',
+      amountPaid: 400,
+      change: 60,
+    },
     notes: 'Entregar en puerta principal, llamar al llegar',
+    assignedTo: 3,
+    assignedToName: 'Repartidor Principal',
+    assignedAt: new Date().toISOString(),
   },
   {
     id: 'PED-1002',
@@ -83,7 +91,14 @@ export const orderStore = [
       shippingFee: 50,
       total: 680,
     },
+    payment: {
+      method: 'transferencia',
+      transferStatus: 'aceptada',
+    },
     notes: 'Facturar a la empresa',
+    assignedTo: null,
+    assignedToName: '',
+    assignedAt: null,
   },
   {
     id: 'PED-1003',
@@ -116,6 +131,14 @@ export const orderStore = [
       shippingFee: 30,
       total: 280,
     },
+    payment: {
+      method: 'efectivo',
+      amountPaid: 300,
+      change: 20,
+    },
     notes: '',
+    assignedTo: 3,
+    assignedToName: 'Repartidor Principal',
+    assignedAt: new Date(Date.now() - 86400000 * 2).toISOString(),
   },
 ];
