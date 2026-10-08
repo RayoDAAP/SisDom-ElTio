@@ -18,6 +18,8 @@ const env = {
   JWT_SECRET: process.env.JWT_SECRET || 'tacos_el_tio_super_secret_key_2024',
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '24h',
   NODE_ENV: process.env.NODE_ENV || 'development',
+  SUPABASE_URL: process.env.SUPABASE_URL || '',
+  SUPABASE_KEY: process.env.SUPABASE_KEY || process.env.SUPABASE_SECRET_KEY || '',
 };
 
 export default env;

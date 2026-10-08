@@ -8,10 +8,10 @@ import { sendSuccess, sendError } from '../utils/responseHelper.js';
 /**
  * GET /api/orders?range=day|week|month|all
  */
-export const getOrders = (req, res) => {
+export const getOrders = async (req, res) => {
   try {
     const range = req.query.range || 'all';
-    const orders = OrderService.getOrders(range, req.user);
+    const orders = await OrderService.getOrders(range, req.user);
     return sendSuccess(res, 200, 'Lista de pedidos obtenida', { orders });
   } catch (error) {
     return sendError(res, 500, error.message);
@@ -21,9 +21,9 @@ export const getOrders = (req, res) => {
 /**
  * GET /api/orders/:id
  */
-export const getOrderById = (req, res) => {
+export const getOrderById = async (req, res) => {
   try {
-    const order = OrderService.getOrderById(req.params.id);
+    const order = await OrderService.getOrderById(req.params.id);
     if (!order) {
       return sendError(res, 404, 'Pedido no encontrado');
     }
@@ -36,7 +36,7 @@ export const getOrderById = (req, res) => {
 /**
  * POST /api/orders
  */
-export const createOrder = (req, res) => {
+export const createOrder = async (req, res) => {
   try {
     const orderData = req.body;
     if (!orderData.client || !orderData.items || !orderData.pricing) {
@@ -44,7 +44,7 @@ export const createOrder = (req, res) => {
     }
 
     const createdByName = req.user?.name || 'Trabajador';
-    const newOrder = OrderService.createOrder(orderData, createdByName);
+    const newOrder = await OrderService.createOrder(orderData, createdByName);
     return sendSuccess(res, 201, 'Pedido registrado exitosamente', { order: newOrder });
   } catch (error) {
     return sendError(res, 400, error.message);
@@ -54,14 +54,14 @@ export const createOrder = (req, res) => {
 /**
  * PATCH /api/orders/:id/status
  */
-export const updateOrderStatus = (req, res) => {
+export const updateOrderStatus = async (req, res) => {
   try {
     const { status } = req.body;
     if (!status) {
       return sendError(res, 400, 'El estado es requerido');
     }
 
-    const updatedOrder = OrderService.updateOrderStatus(req.params.id, status);
+    const updatedOrder = await OrderService.updateOrderStatus(req.params.id, status);
     return sendSuccess(res, 200, 'Estado del pedido actualizado', { order: updatedOrder });
   } catch (error) {
     return sendError(res, 400, error.message);
@@ -73,11 +73,11 @@ export const updateOrderStatus = (req, res) => {
  * Asigna o desasigna un repartidor activo al pedido.
  * Solo accesible para el rol Administrador.
  */
-export const assignOrder = (req, res) => {
+export const assignOrder = async (req, res) => {
   try {
     const { driverId } = req.body;
     // driverId puede ser null para desasignar
-    const updatedOrder = OrderService.assignOrder(req.params.id, driverId ?? null);
+    const updatedOrder = await OrderService.assignOrder(req.params.id, driverId ?? null);
     return sendSuccess(res, 200, 'Pedido asignado correctamente', { order: updatedOrder });
   } catch (error) {
     return sendError(res, 400, error.message);
@@ -89,10 +89,10 @@ export const assignOrder = (req, res) => {
  * Reporta que falta algún producto o complemento en el pedido.
  * Pone el pedido en estado 'incompleto' con máxima prioridad.
  */
-export const reportMissingItems = (req, res) => {
+export const reportMissingItems = async (req, res) => {
   try {
     const { note } = req.body;
-    const updatedOrder = OrderService.reportMissingItems(req.params.id, note, req.user);
+    const updatedOrder = await OrderService.reportMissingItems(req.params.id, note, req.user);
     return sendSuccess(res, 200, 'Reporte de faltante registrado con máxima prioridad', {
       order: updatedOrder,
     });
@@ -105,13 +105,12 @@ export const reportMissingItems = (req, res) => {
  * PATCH /api/orders/:id/payment-status
  * Actualiza el estado de la transferencia bancaria (pendiente / aceptada).
  */
-export const updatePaymentStatus = (req, res) => {
+export const updatePaymentStatus = async (req, res) => {
   try {
     const { transferStatus } = req.body;
-    const updatedOrder = OrderService.updatePaymentStatus(req.params.id, transferStatus);
+    const updatedOrder = await OrderService.updatePaymentStatus(req.params.id, transferStatus);
     return sendSuccess(res, 200, 'Estado de pago actualizado', { order: updatedOrder });
   } catch (error) {
     return sendError(res, 400, error.message);
   }
 };
-

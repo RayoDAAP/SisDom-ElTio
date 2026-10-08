@@ -49,7 +49,7 @@ const OrderDetailModal = ({
   if (!order) return null;
 
   const { client, items, pricing, status, id, createdAt, createdBy, notes, payment, missingReport } = order;
-  const statusConfig = ORDER_STATUS_CONFIG[status] || ORDER_STATUS_CONFIG.pendiente;
+  const statusConfig = ORDER_STATUS_CONFIG[status] || ORDER_STATUS_CONFIG.listo;
   const isLocked = status === 'entregado' || status === 'cancelado';
 
   return (
@@ -110,7 +110,6 @@ const OrderDetailModal = ({
                   className="text-xs font-semibold bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-brand-red/20 focus:border-brand-red cursor-pointer"
                 >
                   <option value="incompleto">Faltante (Urgente)</option>
-                  <option value="pendiente">Pendiente</option>
                   <option value="listo">Listo para Entrega</option>
                   <option value="asignado">Asignado a Repartidor</option>
                   <option value="en_camino">En Camino</option>

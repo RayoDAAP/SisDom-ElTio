@@ -1,9 +1,10 @@
 /**
  * @module User
- * @description Modelo de usuario y repositorio en memoria.
+ * @description Modelo de usuario y repositorio conectado a Supabase.
  *              Soporta roles de Administrador, Auxiliar y Repartidor,
  *              autenticación por nombre de usuario y control de activación.
  */
+import { supabase } from '../config/supabase.js';
 
 /** @enum {string} Roles disponibles en el sistema */
 export const USER_ROLES = {
@@ -14,46 +15,23 @@ export const USER_ROLES = {
 };
 
 /**
- * Store en memoria con usuarios por defecto.
- * Contraseñas hasheadas con bcryptjs (10 rondas):
- * - admin: admin123
- * - auxiliar: user123
- * - repartidor: rep123
+ * Normaliza un registro de base de datos a formato de la aplicación (camelCase).
+ * @param {object} row
+ * @returns {object|null}
  */
-export const userStore = [
-  {
-    id: 1,
-    name: 'Administrador General',
-    username: 'admin',
-    email: 'admin@eltio.com',
-    password: '$2a$10$XKjNEER1kO7oZ.0hmxW.RewjtgFl2w2J5el7fV5Q62xFqrS1Ppul.', // admin123
-    role: USER_ROLES.ADMIN,
-    isActive: true,
-    createdAt: new Date('2024-01-01').toISOString(),
-  },
-  {
-    id: 2,
-    name: 'Auxiliar de Pedidos',
-    username: 'auxiliar',
-    email: 'auxiliar@eltio.com',
-    password: '$2a$10$69Qf0PGdmUQwivptGvO0Yezi8ppvcuDNeYOffBk.W/QRl6s4oSqty', // user123
-    role: USER_ROLES.AUXILIAR,
-    isActive: true,
-    createdAt: new Date('2024-01-02').toISOString(),
-  },
-  {
-    id: 3,
-    name: 'Repartidor Principal',
-    username: 'repartidor',
-    email: 'repartidor@eltio.com',
-    password: '$2a$10$AH9bILCFta0FKRE6sWLr3Oa4GsqhgEfaGwq7BCx20Ew1H9bgTSj6C', // rep123
-    role: USER_ROLES.REPARTIDOR,
-    isActive: true,
-    createdAt: new Date('2024-01-03').toISOString(),
-  },
-];
-
-let nextUserId = 4;
+export const mapUserFromDB = (row) => {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    username: row.username,
+    email: row.email,
+    password: row.password,
+    role: row.role,
+    isActive: row.is_active,
+    createdAt: row.created_at,
+  };
+};
 
 /**
  * Filtra el campo sensible password antes de responder al cliente.
@@ -69,74 +47,109 @@ export const toPublicUser = (user) => {
 /**
  * Busca un usuario por nombre de usuario (o email como alternativa).
  * @param {string} identifier
- * @returns {object | undefined}
+ * @returns {Promise<object | null>}
  */
-export const findUserByUsername = (identifier) => {
-  if (!identifier) return undefined;
+export const findUserByUsername = async (identifier) => {
+  if (!identifier) return null;
   const clean = identifier.trim().toLowerCase();
-  return userStore.find(
-    (u) =>
-      u.username?.toLowerCase() === clean ||
-      u.email?.toLowerCase() === clean
-  );
+
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .or(`username.ilike.${clean},email.ilike.${clean}`)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return mapUserFromDB(data);
 };
 
 /**
  * Busca un usuario por ID numérico.
  * @param {number} id
- * @returns {object | undefined}
+ * @returns {Promise<object | null>}
  */
-export const findUserById = (id) => userStore.find((u) => u.id === Number(id));
+export const findUserById = async (id) => {
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', Number(id))
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return mapUserFromDB(data);
+};
 
 /**
  * Retorna todos los usuarios en formato seguro.
- * @returns {Array<object>}
+ * @returns {Promise<Array<object>>}
  */
-export const getAllUsers = () => userStore.map(toPublicUser);
+export const getAllUsers = async () => {
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .order('id', { ascending: true });
+
+  if (error || !data) return [];
+  return data.map(mapUserFromDB).map(toPublicUser);
+};
 
 /**
- * Crea un nuevo usuario en el store.
+ * Crea un nuevo usuario en la base de datos Supabase.
  * @param {object} data
- * @returns {object} Usuario público creado
+ * @returns {Promise<object>} Usuario público creado
  */
-export const createUserInStore = (data) => {
-  const newUser = {
-    id: nextUserId++,
+export const createUserInStore = async (data) => {
+  const payload = {
     name: data.name.trim(),
     username: data.username.trim().toLowerCase(),
     email: `${data.username.trim().toLowerCase()}@eltio.com`,
-    password: data.password, // Ya debe venir hasheada
+    password: data.password, // Ya hasheada
     role: data.role,
-    isActive: true,
-    createdAt: new Date().toISOString(),
+    is_active: true,
   };
 
-  userStore.push(newUser);
-  return toPublicUser(newUser);
+  const { data: inserted, error } = await supabase
+    .from('users')
+    .insert(payload)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Error al crear usuario en base de datos: ${error.message}`);
+  }
+
+  return toPublicUser(mapUserFromDB(inserted));
 };
 
 /**
  * Actualiza la contraseña de un usuario.
  * @param {number} id
  * @param {string} hashedPassword
- * @returns {boolean}
+ * @returns {Promise<boolean>}
  */
-export const updateUserPasswordInStore = (id, hashedPassword) => {
-  const user = findUserById(id);
-  if (!user) return false;
-  user.password = hashedPassword;
-  return true;
+export const updateUserPasswordInStore = async (id, hashedPassword) => {
+  const { error } = await supabase
+    .from('users')
+    .update({ password: hashedPassword })
+    .eq('id', Number(id));
+
+  return !error;
 };
 
 /**
  * Cambia el estado de activación de un usuario.
  * @param {number} id
  * @param {boolean} isActive
- * @returns {object | null}
+ * @returns {Promise<object | null>}
  */
-export const toggleUserStatusInStore = (id, isActive) => {
-  const user = findUserById(id);
-  if (!user) return null;
-  user.isActive = isActive;
-  return toPublicUser(user);
+export const toggleUserStatusInStore = async (id, isActive) => {
+  const { data, error } = await supabase
+    .from('users')
+    .update({ is_active: isActive })
+    .eq('id', Number(id))
+    .select()
+    .single();
+
+  if (error || !data) return null;
+  return toPublicUser(mapUserFromDB(data));
 };

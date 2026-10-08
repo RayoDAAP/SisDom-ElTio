@@ -1,12 +1,12 @@
 /**
  * @module Order
- * @description Modelo de Pedidos para Tacos El Tío.
+ * @description Modelo de Pedidos conectado a Supabase para Tacos El Tío.
  *              Guarda información del cliente, desgloses de Barbacoa, Menudo, Extras y Totales.
  */
+import { supabase } from '../config/supabase.js';
 
 export const ORDER_STATUS = {
   MISSING_ITEMS: 'incompleto', // Máxima prioridad por reporte de faltante
-  PENDING: 'pendiente',
   READY: 'listo',
   ASSIGNED: 'asignado', // Asignado a repartidor
   ON_THE_WAY: 'en_camino',
@@ -14,132 +14,49 @@ export const ORDER_STATUS = {
   CANCELLED: 'cancelado',
 };
 
-/** Store en memoria inicial con pedidos de prueba */
-export const orderStore = [
-  {
-    id: 'PED-1001',
-    createdAt: new Date().toISOString(),
-    status: ORDER_STATUS.ASSIGNED,
-    createdBy: 'Auxiliar de Pedidos',
-    client: {
-      type: 'particular',
-      name: 'Carlos Ruiz',
-      phone: '6145550192',
-      street: 'Av. Universidad',
-      number: '1402',
-      colonia: 'Centro',
-      companyName: '',
-    },
-    items: {
-      barbacoa: [
-        { type: 'gramos', amount: 500, label: '500g de Barbacoa', price: 180 },
-      ],
-      menudo: [
-        { size: '1L', quantity: 1, label: '1 Litro de Menudo', price: 120 },
-      ],
-      extras: {
-        salsaRed: 2,
-        salsaGreen: 2,
-        onion: 1,
-        tortillas: 'medio_kg', // 5_piezas, 10_piezas, medio_kg, kilo
-      },
-    },
-    pricing: {
-      subtotal: 300,
-      shippingFee: 40,
-      total: 340,
-    },
-    payment: {
-      method: 'efectivo',
-      amountPaid: 400,
-      change: 60,
-    },
-    notes: 'Entregar en puerta principal, llamar al llegar',
-    assignedTo: 3,
-    assignedToName: 'Repartidor Principal',
-    assignedAt: new Date().toISOString(),
-  },
-  {
-    id: 'PED-1002',
-    createdAt: new Date(Date.now() - 3600000 * 2).toISOString(), // 2 horas antes
-    status: ORDER_STATUS.READY,
-    createdBy: 'Administrador General',
-    client: {
-      type: 'empresa',
-      name: 'Ing. Sofía Morales',
-      phone: '6149876543',
-      street: 'Periférico Juventud',
-      number: '8900',
-      colonia: 'Complejo Industrial',
-      companyName: 'Constructora del Norte SA',
-    },
-    items: {
-      barbacoa: [
-        { type: 'platillo', quantity: 5, unitPrice: 100, label: '5 Platillos de $100 c/u', price: 500 },
-      ],
-      menudo: [
-        { size: '0.5L', quantity: 2, label: '2 Medio Litro de Menudo', price: 130 },
-      ],
-      extras: {
-        salsaRed: 4,
-        salsaGreen: 4,
-        onion: 3,
-        tortillas: 'kilo',
-      },
-    },
-    pricing: {
-      subtotal: 630,
-      shippingFee: 50,
-      total: 680,
-    },
-    payment: {
-      method: 'transferencia',
-      transferStatus: 'aceptada',
-    },
-    notes: 'Facturar a la empresa',
-    assignedTo: null,
-    assignedToName: '',
-    assignedAt: null,
-  },
-  {
-    id: 'PED-1003',
-    createdAt: new Date(Date.now() - 86400000 * 2).toISOString(), // hace 2 días
-    status: ORDER_STATUS.DELIVERED,
-    createdBy: 'Auxiliar de Pedidos',
-    client: {
-      type: 'particular',
-      name: 'María Fernández',
-      phone: '6142223344',
-      street: 'Calle 24a',
-      number: '405',
-      colonia: 'Santa Rosa',
-      companyName: '',
-    },
-    items: {
-      barbacoa: [
-        { type: 'monto', amount: 250, label: 'Barbacoa por Monto ($250)', price: 250 },
-      ],
-      menudo: [],
-      extras: {
-        salsaRed: 1,
-        salsaGreen: 1,
-        onion: 1,
-        tortillas: '10_piezas',
-      },
-    },
-    pricing: {
-      subtotal: 250,
-      shippingFee: 30,
-      total: 280,
-    },
-    payment: {
-      method: 'efectivo',
-      amountPaid: 300,
-      change: 20,
-    },
-    notes: '',
-    assignedTo: 3,
-    assignedToName: 'Repartidor Principal',
-    assignedAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-  },
-];
+/**
+ * Mapea una fila de Supabase a formato camelCase de la aplicación.
+ * @param {object} row
+ * @returns {object|null}
+ */
+export const mapOrderFromDB = (row) => {
+  if (!row) return null;
+  return {
+    id: row.id,
+    createdAt: row.created_at,
+    status: row.status,
+    createdBy: row.created_by || '',
+    client: row.client || {},
+    items: row.items || {},
+    pricing: row.pricing || {},
+    payment: row.payment || {},
+    notes: row.notes || '',
+    assignedTo: row.assigned_to,
+    assignedToName: row.assigned_to_name || '',
+    assignedAt: row.assigned_at,
+    missingReport: row.missing_report || null,
+  };
+};
+
+/**
+ * Genera el siguiente ID secuencial para pedidos (PED-1001, etc.).
+ * @returns {Promise<string>}
+ */
+export const generateNextOrderId = async () => {
+  const { data } = await supabase
+    .from('orders')
+    .select('id')
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (!data || data.length === 0) {
+    return 'PED-1001';
+  }
+  const lastId = data[0].id;
+  const match = lastId.match(/PED-(\d+)/);
+  if (match) {
+    const nextNum = parseInt(match[1], 10) + 1;
+    return `PED-${nextNum}`;
+  }
+  return `PED-${Date.now().toString().slice(-4)}`;
+};

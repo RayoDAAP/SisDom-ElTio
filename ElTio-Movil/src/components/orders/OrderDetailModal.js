@@ -47,7 +47,7 @@ export const OrderDetailModal = ({
   if (!order) return null;
 
   const { id, client, items, pricing, status, payment, notes, createdAt, missingReport } = order;
-  const statusCfg = ORDER_STATUS_CONFIG[status] || ORDER_STATUS_CONFIG[ORDER_STATUS.PENDING];
+  const statusCfg = ORDER_STATUS_CONFIG[status] || ORDER_STATUS_CONFIG[ORDER_STATUS.READY];
   const isLocked = status === ORDER_STATUS.DELIVERED || status === ORDER_STATUS.CANCELLED;
   const fullAddress = `Calle ${client?.street || ''} #${client?.number || ''}, Col. ${client?.colonia || ''}`;
 

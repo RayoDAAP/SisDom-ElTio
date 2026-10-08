@@ -6,7 +6,6 @@ import { THEME } from '../config/theme';
 
 export const ORDER_STATUS = {
   MISSING_ITEMS: 'incompleto',
-  PENDING: 'pendiente',
   READY: 'listo',
   ASSIGNED: 'asignado',
   ON_THE_WAY: 'en_camino',
@@ -18,10 +17,6 @@ export const ORDER_STATUS_CONFIG = {
   [ORDER_STATUS.MISSING_ITEMS]: {
     label: 'Faltante (Urgente)',
     colors: THEME.colors.statusMissing,
-  },
-  [ORDER_STATUS.PENDING]: {
-    label: 'Pendiente',
-    colors: THEME.colors.statusPending,
   },
   [ORDER_STATUS.READY]: {
     label: 'Listo para Entrega',

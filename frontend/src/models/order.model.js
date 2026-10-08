@@ -65,11 +65,7 @@ export const ORDER_STATUS_CONFIG = {
     badgeClass: 'bg-rose-100 text-rose-900 border-rose-400 font-black ring-1 ring-rose-400',
     icon: 'AlertTriangle',
   },
-  pendiente: {
-    label: 'Pendiente',
-    badgeClass: 'bg-amber-100 text-amber-900 border-amber-300 font-bold',
-    icon: 'Clock',
-  },
+
   listo: {
     label: 'Listo para Entrega',
     badgeClass: 'bg-emerald-100 text-emerald-900 border-emerald-300 font-bold',

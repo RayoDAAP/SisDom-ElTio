@@ -8,10 +8,15 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js"
   },
-  "keywords": ["tacos", "restaurant", "api"],
+  "keywords": [
+    "tacos",
+    "restaurant",
+    "api"
+  ],
   "author": "El Tío Dev Team",
   "license": "MIT",
   "dependencies": {
+    "@supabase/supabase-js": "^2.117.3",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

@@ -5,20 +5,20 @@
 import { findClientByPhone, saveOrUpdateClient } from '../models/Client.js';
 import { getShippingFeeByColonia, saveColoniaShippingFee } from '../models/ColoniaShipping.js';
 
-export const searchClientByPhone = (phone) => {
-  return findClientByPhone(phone);
+export const searchClientByPhone = async (phone) => {
+  return await findClientByPhone(phone);
 };
 
-export const fetchShippingFee = (colonia) => {
-  const fee = getShippingFeeByColonia(colonia);
+export const fetchShippingFee = async (colonia) => {
+  const fee = await getShippingFeeByColonia(colonia);
   return { colonia, fee };
 };
 
-export const registerClientAndColonia = (clientData, shippingFee) => {
+export const registerClientAndColonia = async (clientData, shippingFee) => {
   if (clientData && clientData.phone) {
-    saveOrUpdateClient(clientData);
+    await saveOrUpdateClient(clientData);
   }
   if (clientData && clientData.colonia && shippingFee !== undefined) {
-    saveColoniaShippingFee(clientData.colonia, shippingFee);
+    await saveColoniaShippingFee(clientData.colonia, shippingFee);
   }
 };

@@ -9,9 +9,9 @@ import { sendSuccess, sendError } from '../utils/responseHelper.js';
  * GET /api/users
  * Retorna la lista de todas las cuentas de usuario.
  */
-export const listUsers = (req, res) => {
+export const listUsers = async (req, res) => {
   try {
-    const users = UserService.listUsers();
+    const users = await UserService.listUsers();
     return sendSuccess(res, 200, 'Lista de usuarios obtenida', { users });
   } catch (error) {
     return sendError(res, 500, error.message);
@@ -54,14 +54,14 @@ export const changePassword = async (req, res) => {
  * PATCH /api/users/:id/status
  * Activa o desactiva la cuenta de un usuario.
  */
-export const toggleUserStatus = (req, res) => {
+export const toggleUserStatus = async (req, res) => {
   try {
     const { isActive } = req.body;
     if (typeof isActive !== 'boolean') {
       return sendError(res, 400, 'El estado isActive debe ser booleano');
     }
 
-    const updatedUser = UserService.setUserActiveStatus(Number(req.params.id), isActive);
+    const updatedUser = await UserService.setUserActiveStatus(Number(req.params.id), isActive);
     return sendSuccess(res, 200, `Usuario ${isActive ? 'activado' : 'desactivado'} exitosamente`, {
       user: updatedUser,
     });
@@ -75,9 +75,9 @@ export const toggleUserStatus = (req, res) => {
  * Retorna la lista de repartidores activos disponibles para asignación.
  * Accesible para el rol Administrador.
  */
-export const listActiveDrivers = (req, res) => {
+export const listActiveDrivers = async (req, res) => {
   try {
-    const drivers = UserService.listActiveDrivers();
+    const drivers = await UserService.listActiveDrivers();
     return sendSuccess(res, 200, 'Repartidores activos obtenidos', { drivers });
   } catch (error) {
     return sendError(res, 500, error.message);

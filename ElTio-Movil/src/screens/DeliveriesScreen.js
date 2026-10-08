@@ -40,7 +40,6 @@ import { ORDER_STATUS } from '../models/order.model';
 // Agrupa los estados de pedido en dos categorías: activo vs. completado
 const ACTIVE_STATUSES = new Set([
   ORDER_STATUS.MISSING_ITEMS,
-  ORDER_STATUS.PENDING,
   ORDER_STATUS.READY,
   ORDER_STATUS.ASSIGNED,
   ORDER_STATUS.ON_THE_WAY,

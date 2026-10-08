@@ -32,7 +32,7 @@ export const OrderCard = ({
   isUpdating = false,
 }) => {
   const { id, client, pricing, status, payment, notes, missingReport } = order;
-  const statusCfg = ORDER_STATUS_CONFIG[status] || ORDER_STATUS_CONFIG[ORDER_STATUS.PENDING];
+  const statusCfg = ORDER_STATUS_CONFIG[status] || ORDER_STATUS_CONFIG[ORDER_STATUS.READY];
   const isLocked = status === ORDER_STATUS.DELIVERED || status === ORDER_STATUS.CANCELLED;
 
   const fullAddress = `Calle ${client?.street || ''} #${client?.number || ''}, Col. ${client?.colonia || ''}`;
@@ -207,7 +207,6 @@ export const OrderCard = ({
 
             {status === ORDER_STATUS.ASSIGNED ||
             status === ORDER_STATUS.READY ||
-            status === ORDER_STATUS.PENDING ||
             status === ORDER_STATUS.MISSING_ITEMS ? (
               <Button
                 title="Iniciar Ruta"

@@ -1,14 +1,13 @@
 /**
  * @module OrderService
- * @description Servicio con la lógica de negocio para pedidos.
+ * @description Servicio con la lógica de negocio para pedidos conectado a Supabase.
  *              Incluye soporte para métodos de pago (Efectivo/Transferencia),
- *              ítems de tacos/gorditas/tostadas y filtrado por rol (Auxiliar solo ve órdenes de su turno/día).
+ *              ítems de tacos/gorditas/tostadas y filtrado por rol.
  */
-import { orderStore, ORDER_STATUS } from '../models/Order.js';
+import { supabase } from '../config/supabase.js';
+import { ORDER_STATUS, mapOrderFromDB, generateNextOrderId } from '../models/Order.js';
 import { registerClientAndColonia } from './ClientService.js';
 import { findUserById, USER_ROLES } from '../models/User.js';
-
-let orderCounter = 1004;
 
 /**
  * Obtiene los pedidos con opción de filtrado por período y rol del usuario solicitante.
@@ -17,25 +16,29 @@ let orderCounter = 1004;
  *
  * @param {'day' | 'week' | 'month' | 'all'} range
  * @param {object} requestingUser
- * @returns {Array} Lista de pedidos filtrada y ordenada por fecha descendente
+ * @returns {Promise<Array>} Lista de pedidos filtrada y ordenada por prioridad y FIFO
  */
-export const getOrders = (range = 'all', requestingUser = null) => {
-  const now = new Date();
+export const getOrders = async (range = 'all', requestingUser = null) => {
   const isAuxiliar = requestingUser?.role === 'auxiliar' || requestingUser?.role === 'user';
   const isRepartidor = requestingUser?.role === 'repartidor';
   const effectiveRange = isAuxiliar ? 'day' : range;
 
-  const filtered = orderStore.filter((order) => {
-    // Si el usuario solicitante es repartidor, solo puede ver pedidos asignados a él
-    if (isRepartidor) {
-      if (
-        order.assignedTo !== requestingUser.id &&
-        String(order.assignedTo) !== String(requestingUser.id)
-      ) {
-        return false;
-      }
-    }
+  let query = supabase.from('orders').select('*');
 
+  if (isRepartidor && requestingUser?.id) {
+    query = query.eq('assigned_to', requestingUser.id);
+  }
+
+  const { data, error } = await query;
+  if (error || !data) {
+    console.error('Error obteniendo pedidos de Supabase:', error?.message);
+    return [];
+  }
+
+  const now = new Date();
+  const orders = data.map(mapOrderFromDB);
+
+  const filtered = orders.filter((order) => {
     const orderDate = new Date(order.createdAt);
     const diffTime = Math.abs(now - orderDate);
     const diffDays = diffTime / (1000 * 60 * 60 * 24);
@@ -52,13 +55,12 @@ export const getOrders = (range = 'all', requestingUser = null) => {
         orderDate.getFullYear() === now.getFullYear()
       );
     }
-
     return true;
   });
 
-  // Prioridad: 
+  // Prioridad:
   // 1. Pedidos con reporte de faltante (ORDER_STATUS.MISSING_ITEMS = 'incompleto') tienen máxima prioridad
-  // 2. Pedidos activos en curso (pendiente, listo, asignado, en_camino)
+  // 2. Pedidos activos en curso (listo, asignado, en_camino)
   // 3. Pedidos finalizados (entregado, cancelado)
   // Dentro del mismo grupo: ordenados del MÁS VIEJO al MÁS NUEVO (ascendente por createdAt)
   const getPriorityWeight = (order) => {
@@ -71,7 +73,6 @@ export const getOrders = (range = 'all', requestingUser = null) => {
     const weightA = getPriorityWeight(a);
     const weightB = getPriorityWeight(b);
     if (weightA !== weightB) return weightA - weightB;
-    // Del más viejo al más nuevo (FIFO)
     return new Date(a.createdAt) - new Date(b.createdAt);
   });
 };
@@ -79,36 +80,61 @@ export const getOrders = (range = 'all', requestingUser = null) => {
 /**
  * Busca un pedido por su ID.
  * @param {string} id
+ * @returns {Promise<object|null>}
  */
-export const getOrderById = (id) => {
-  return orderStore.find((o) => o.id === id);
+export const getOrderById = async (id) => {
+  const { data, error } = await supabase
+    .from('orders')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return mapOrderFromDB(data);
 };
 
 /**
- * Crea un nuevo pedido y guarda automáticamente al cliente y la tarifa por colonia.
+ * Crea un nuevo pedido en Supabase y guarda automáticamente al cliente y la tarifa por colonia.
  * @param {Object} orderData
  * @param {string} createdByName
+ * @returns {Promise<object>}
  */
-export const createOrder = (orderData, createdByName) => {
-  const newOrder = {
-    id: `PED-${orderCounter++}`,
-    createdAt: new Date().toISOString(),
-    status: ORDER_STATUS.PENDING,
-    createdBy: createdByName || 'Auxiliar de Pedidos',
-    assignedTo: orderData.assignedTo || null,
-    assignedToName: orderData.assignedToName || '',
-    assignedAt: orderData.assignedTo ? new Date().toISOString() : null,
-    ...orderData,
+export const createOrder = async (orderData, createdByName) => {
+  const newId = await generateNextOrderId();
+  const createdAt = new Date().toISOString();
+
+  const payload = {
+    id: newId,
+    created_at: createdAt,
+    status: ORDER_STATUS.READY, // Estatus inicial: 'listo'
+    created_by: createdByName || 'Auxiliar de Pedidos',
+    client: orderData.client || {},
+    items: orderData.items || {},
+    pricing: orderData.pricing || {},
+    payment: orderData.payment || {},
+    notes: orderData.notes || '',
+    assigned_to: orderData.assignedTo || null,
+    assigned_to_name: orderData.assignedToName || '',
+    assigned_at: orderData.assignedTo ? createdAt : null,
+    missing_report: null,
   };
 
-  orderStore.unshift(newOrder);
+  const { data, error } = await supabase
+    .from('orders')
+    .insert(payload)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Error al registrar el pedido en base de datos: ${error.message}`);
+  }
 
   // Guardado de cliente y colonia de forma automática
   if (orderData.client) {
-    registerClientAndColonia(orderData.client, orderData.pricing?.shippingFee);
+    await registerClientAndColonia(orderData.client, orderData.pricing?.shippingFee);
   }
 
-  return newOrder;
+  return mapOrderFromDB(data);
 };
 
 /**
@@ -116,9 +142,10 @@ export const createOrder = (orderData, createdByName) => {
  * Si el pedido ya está entregado o cancelado, queda bloqueado y no se puede modificar.
  * @param {string} id
  * @param {string} newStatus
+ * @returns {Promise<object>}
  */
-export const updateOrderStatus = (id, newStatus) => {
-  const order = getOrderById(id);
+export const updateOrderStatus = async (id, newStatus) => {
+  const order = await getOrderById(id);
   if (!order) {
     throw new Error('Pedido no encontrado');
   }
@@ -132,8 +159,18 @@ export const updateOrderStatus = (id, newStatus) => {
     throw new Error('Estado de pedido inválido');
   }
 
-  order.status = newStatus;
-  return order;
+  const { data, error } = await supabase
+    .from('orders')
+    .update({ status: newStatus })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Error al actualizar estado: ${error.message}`);
+  }
+
+  return mapOrderFromDB(data);
 };
 
 /**
@@ -142,10 +179,10 @@ export const updateOrderStatus = (id, newStatus) => {
  * Si el pedido ya está entregado o cancelado, no se puede modificar la asignación.
  * @param {string} id - Folio del pedido
  * @param {number|string|null} driverId - ID del repartidor
- * @returns {object} Pedido actualizado
+ * @returns {Promise<object>} Pedido actualizado
  */
-export const assignOrder = (id, driverId) => {
-  const order = getOrderById(id);
+export const assignOrder = async (id, driverId) => {
+  const order = await getOrderById(id);
   if (!order) {
     throw new Error('Pedido no encontrado');
   }
@@ -154,18 +191,27 @@ export const assignOrder = (id, driverId) => {
     throw new Error(`El pedido ${id} ya está ${order.status} y no se puede modificar.`);
   }
 
-  // Si se pasa null, vacio o 0, desasignar
+  // Si se pasa null, vacío o 0, desasignar
   if (!driverId) {
-    order.assignedTo = null;
-    order.assignedToName = '';
-    order.assignedAt = null;
-    if (order.status === ORDER_STATUS.ASSIGNED) {
-      order.status = ORDER_STATUS.PENDING;
-    }
-    return order;
+    const updatePayload = {
+      assigned_to: null,
+      assigned_to_name: '',
+      assigned_at: null,
+      status: order.status === ORDER_STATUS.ASSIGNED ? ORDER_STATUS.READY : order.status,
+    };
+
+    const { data, error } = await supabase
+      .from('orders')
+      .update(updatePayload)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+    return mapOrderFromDB(data);
   }
 
-  const driver = findUserById(driverId);
+  const driver = await findUserById(driverId);
   if (!driver) {
     throw new Error('El repartidor especificado no existe');
   }
@@ -178,16 +224,22 @@ export const assignOrder = (id, driverId) => {
     throw new Error('No se puede asignar un pedido a una cuenta de repartidor desactivada');
   }
 
-  order.assignedTo = driver.id;
-  order.assignedToName = driver.name;
-  order.assignedAt = new Date().toISOString();
+  const updatePayload = {
+    assigned_to: driver.id,
+    assigned_to_name: driver.name,
+    assigned_at: new Date().toISOString(),
+    status: order.status === ORDER_STATUS.READY ? ORDER_STATUS.ASSIGNED : order.status,
+  };
 
-  // Asignar el nuevo estatus 'asignado' si estaba pendiente o listo
-  if (order.status === ORDER_STATUS.PENDING || order.status === ORDER_STATUS.READY) {
-    order.status = ORDER_STATUS.ASSIGNED;
-  }
+  const { data, error } = await supabase
+    .from('orders')
+    .update(updatePayload)
+    .eq('id', id)
+    .select()
+    .single();
 
-  return order;
+  if (error) throw new Error(error.message);
+  return mapOrderFromDB(data);
 };
 
 /**
@@ -196,10 +248,10 @@ export const assignOrder = (id, driverId) => {
  * @param {string} id - Folio del pedido
  * @param {string} missingNote - Descripción de lo que falta
  * @param {object} reportingUser - Usuario que realiza el reporte
- * @returns {object} Pedido actualizado con el reporte
+ * @returns {Promise<object>} Pedido actualizado con el reporte
  */
-export const reportMissingItems = (id, missingNote, reportingUser = null) => {
-  const order = getOrderById(id);
+export const reportMissingItems = async (id, missingNote, reportingUser = null) => {
+  const order = await getOrderById(id);
   if (!order) {
     throw new Error('Pedido no encontrado');
   }
@@ -212,24 +264,34 @@ export const reportMissingItems = (id, missingNote, reportingUser = null) => {
     throw new Error('Debes describir qué producto o complemento hace falta en el pedido');
   }
 
-  order.status = ORDER_STATUS.MISSING_ITEMS;
-  order.missingReport = {
+  const missingReport = {
     note: missingNote.trim(),
     reportedAt: new Date().toISOString(),
     reportedBy: reportingUser?.name || 'Repartidor',
   };
 
-  return order;
+  const { data, error } = await supabase
+    .from('orders')
+    .update({
+      status: ORDER_STATUS.MISSING_ITEMS,
+      missing_report: missingReport,
+    })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return mapOrderFromDB(data);
 };
 
 /**
  * Actualiza el estado de una transferencia bancaria (pendiente / aceptada).
  * @param {string} id - Folio del pedido
  * @param {'pendiente' | 'aceptada'} transferStatus
- * @returns {object} Pedido actualizado
+ * @returns {Promise<object>} Pedido actualizado
  */
-export const updatePaymentStatus = (id, transferStatus) => {
-  const order = getOrderById(id);
+export const updatePaymentStatus = async (id, transferStatus) => {
+  const order = await getOrderById(id);
   if (!order) {
     throw new Error('Pedido no encontrado');
   }
@@ -239,10 +301,18 @@ export const updatePaymentStatus = (id, transferStatus) => {
     throw new Error('Estado de transferencia no válido. Debe ser pendiente o aceptada.');
   }
 
-  if (!order.payment) {
-    order.payment = { method: 'transferencia' };
-  }
+  const updatedPayment = {
+    ...(order.payment || { method: 'transferencia' }),
+    transferStatus,
+  };
 
-  order.payment.transferStatus = transferStatus;
-  return order;
+  const { data, error } = await supabase
+    .from('orders')
+    .update({ payment: updatedPayment })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return mapOrderFromDB(data);
 };

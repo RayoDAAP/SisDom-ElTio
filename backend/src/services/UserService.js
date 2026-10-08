@@ -15,10 +15,10 @@ import {
 
 /**
  * Obtiene todas las cuentas del sistema.
- * @returns {Array<object>}
+ * @returns {Promise<Array<object>>}
  */
-export const listUsers = () => {
-  return getAllUsers();
+export const listUsers = async () => {
+  return await getAllUsers();
 };
 
 /**
@@ -44,13 +44,13 @@ export const createUser = async ({ name, username, password, role }) => {
     throw new Error('Rol no válido. Debe ser admin, auxiliar o repartidor.');
   }
 
-  const existing = findUserByUsername(username);
+  const existing = await findUserByUsername(username);
   if (existing) {
     throw new Error('El nombre de usuario ya está registrado en el sistema');
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
-  return createUserInStore({
+  return await createUserInStore({
     name,
     username,
     password: hashedPassword,
@@ -69,23 +69,23 @@ export const changePassword = async (userId, newPassword) => {
     throw new Error('La nueva contraseña debe tener al menos 4 caracteres');
   }
 
-  const user = findUserById(userId);
+  const user = await findUserById(userId);
   if (!user) {
     throw new Error('Usuario no encontrado');
   }
 
   const hashedPassword = await bcrypt.hash(newPassword, 10);
-  return updateUserPasswordInStore(userId, hashedPassword);
+  return await updateUserPasswordInStore(userId, hashedPassword);
 };
 
 /**
  * Activa o desactiva la cuenta de un usuario.
  * @param {number} userId
  * @param {boolean} isActive
- * @returns {object}
+ * @returns {Promise<object>}
  */
-export const setUserActiveStatus = (userId, isActive) => {
-  const user = findUserById(userId);
+export const setUserActiveStatus = async (userId, isActive) => {
+  const user = await findUserById(userId);
   if (!user) {
     throw new Error('Usuario no encontrado');
   }
@@ -95,15 +95,16 @@ export const setUserActiveStatus = (userId, isActive) => {
     throw new Error('No es posible desactivar una cuenta de Administrador principal');
   }
 
-  return toggleUserStatusInStore(userId, isActive);
+  return await toggleUserStatusInStore(userId, isActive);
 };
 
 /**
  * Retorna los repartidores con cuenta activa disponibles para asignación de pedidos.
- * @returns {Array<object>}
+ * @returns {Promise<Array<object>>}
  */
-export const listActiveDrivers = () => {
-  return getAllUsers().filter(
+export const listActiveDrivers = async () => {
+  const all = await getAllUsers();
+  return all.filter(
     (u) => u.role === USER_ROLES.REPARTIDOR && u.isActive === true
   );
 };

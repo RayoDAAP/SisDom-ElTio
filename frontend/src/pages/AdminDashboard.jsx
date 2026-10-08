@@ -211,19 +211,9 @@ const AdminDashboard = () => {
         urgent: true,
       },
       {
-        id: 'pendiente',
-        title: 'Pedidos Pendientes',
-        subtitle: 'Esperando preparación (priorizados del más antiguo al más reciente)',
-        orders: filteredOrders.filter((o) => o.status === 'pendiente'),
-        badgeClass: 'bg-amber-600 text-white',
-        borderClass: 'border-amber-200 bg-white',
-        headerBg: 'bg-amber-50 text-amber-950 border-amber-200',
-        icon: Clock,
-      },
-      {
         id: 'listo',
-        title: 'Listos para Entrega',
-        subtitle: 'Preparados y empacados en sucursal',
+        title: 'Listos para Entrega / Despacho',
+        subtitle: 'Preparados y empacados en sucursal (priorizados del más antiguo al más reciente)',
         orders: filteredOrders.filter((o) => o.status === 'listo'),
         badgeClass: 'bg-emerald-600 text-white',
         borderClass: 'border-emerald-200 bg-white',
@@ -550,7 +540,7 @@ const AdminDashboard = () => {
                           <tbody className="divide-y divide-slate-100 text-slate-700">
                             {block.orders.map((order) => {
                               const statusConfig =
-                                ORDER_STATUS_CONFIG[order.status] || ORDER_STATUS_CONFIG.pendiente;
+                                ORDER_STATUS_CONFIG[order.status] || ORDER_STATUS_CONFIG.listo;
                               const isAssigning = assigningOrderId === order.id;
                               const isLocked =
                                 order.status === 'entregado' || order.status === 'cancelado';
@@ -664,7 +654,6 @@ const AdminDashboard = () => {
                                         className={`text-xs font-bold px-2.5 py-1 rounded-lg border cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-400 ${statusConfig.badgeClass}`}
                                       >
                                         <option value="incompleto">Faltante (Urgente)</option>
-                                        <option value="pendiente">Pendiente</option>
                                         <option value="listo">Listo</option>
                                         <option value="asignado">Asignado</option>
                                         <option value="en_camino">En Camino</option>

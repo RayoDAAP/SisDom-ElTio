@@ -34,7 +34,7 @@ const generateToken = (user) =>
  * @returns {Promise<{ token: string, user: object }>}
  */
 export const login = async (usernameOrEmail, password) => {
-  const user = findUserByUsername(usernameOrEmail);
+  const user = await findUserByUsername(usernameOrEmail);
 
   if (!user) {
     throw new Error('Credenciales inválidas');

@@ -183,7 +183,7 @@ const UserDashboard = () => {
                 <tbody className="divide-y divide-slate-100 text-slate-700">
                   {orders.map((order) => {
                     const statusConfig =
-                      ORDER_STATUS_CONFIG[order.status] || ORDER_STATUS_CONFIG.pendiente;
+                      ORDER_STATUS_CONFIG[order.status] || ORDER_STATUS_CONFIG.listo;
                     const orderTime = order.createdAt
                       ? new Date(order.createdAt).toLocaleTimeString('es-MX', {
                           hour: '2-digit',
@@ -232,7 +232,6 @@ const UserDashboard = () => {
                               className={`text-xs font-bold px-2.5 py-1 rounded-lg border cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-400 ${statusConfig.badgeClass}`}
                             >
                               <option value="incompleto">Faltante (Urgente)</option>
-                              <option value="pendiente">Pendiente</option>
                               <option value="listo">Listo</option>
                               <option value="asignado">Asignado</option>
                               <option value="en_camino">En Camino</option>
