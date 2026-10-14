@@ -113,7 +113,7 @@ export const OrderCard = ({
           <Navigation size={16} color="#92400E" style={styles.addressIcon} />
           <View style={styles.addressTextWrapper}>
             <Text style={[styles.addressText, { color: '#92400E', fontWeight: 'bold' }]}>
-              🛍️ Pasa a recoger en sucursal
+              Pasa a recoger en sucursal
             </Text>
             <Text style={[styles.mapHint, { color: '#B45309' }]}>Pedido de mostrador / pickup</Text>
           </View>
@@ -178,8 +178,8 @@ export const OrderCard = ({
                     : styles.transferPendingBadgeText,
                 ]}>
                   {payment?.transferStatus === 'aceptada'
-                    ? 'Transferencia: Aceptada ✓'
-                    : 'Transferencia: Pendiente ⏳'}
+                    ? 'Transferencia: Aceptada'
+                    : 'Transferencia: Pendiente'}
                 </Text>
               </View>
               <Text style={styles.readOnlyNote}>Validado en web (Solo lectura)</Text>

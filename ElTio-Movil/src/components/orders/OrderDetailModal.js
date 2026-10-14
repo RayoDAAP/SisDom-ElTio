@@ -125,7 +125,7 @@ export const OrderDetailModal = ({
             {client?.deliveryType === 'recoger' ? (
               <View style={{ backgroundColor: '#FEF3C7', padding: 8, borderRadius: 6, marginTop: 4 }}>
                 <Text style={{ color: '#92400E', fontWeight: 'bold', fontSize: 12 }}>
-                  🛍️ Pedido para Recoger en Sucursal (Sin envío)
+                  Pedido para Recoger en Sucursal (Sin envío)
                 </Text>
               </View>
             ) : (
@@ -280,8 +280,8 @@ export const OrderDetailModal = ({
                         : styles.transferStatePendingText
                     ]}>
                       {payment?.transferStatus === 'aceptada'
-                        ? 'Transferencia: Aceptada ✓'
-                        : 'Transferencia: Pendiente de Confirmar ⏳'}
+                        ? 'Transferencia: Aceptada'
+                        : 'Transferencia: Pendiente de Confirmar'}
                     </Text>
                   </View>
                   <Text style={styles.transferStateHint}>

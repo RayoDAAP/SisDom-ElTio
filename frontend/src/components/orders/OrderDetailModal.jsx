@@ -206,7 +206,7 @@ const OrderDetailModal = ({
                 {client?.deliveryType === 'recoger' ? (
                   <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 flex items-center gap-2 text-amber-900 font-semibold">
                     <Navigation className="w-4 h-4 text-amber-700 shrink-0" />
-                    <span>🛍️ Pedido para Recoger en Sucursal (Sin envío)</span>
+                    <span>Pedido para Recoger en Sucursal (Sin envío)</span>
                   </div>
                 ) : (
                   <div className="flex items-start gap-1.5">

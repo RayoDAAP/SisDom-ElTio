@@ -210,39 +210,44 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
 
   // Inicializar mapa de Leaflet una vez montado el contenedor
   useEffect(() => {
-    if (!mapContainerRef.current || !window.L) return;
+    if (deliveryType !== 'domicilio') return;
 
-    if (!mapInstanceRef.current) {
-      const defaultLat = coordinates?.lat || 25.7428;
-      const defaultLng = coordinates?.lng || -100.2872;
+    const timer = setTimeout(() => {
+      if (!mapContainerRef.current || !window.L) return;
 
-      const map = window.L.map(mapContainerRef.current).setView([defaultLat, defaultLng], coordinates ? 16 : 13);
-      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '© OpenStreetMap',
-      }).addTo(map);
+      if (!mapInstanceRef.current) {
+        const defaultLat = coordinates?.lat || 25.7428;
+        const defaultLng = coordinates?.lng || -100.2872;
 
-      // Clic directo en el mapa ajusta la ubicación exacta (igual que ine-scanner)
-      map.on('click', (e) => {
-        updateMapPin(e.latlng.lat, e.latlng.lng, 'Ubicación seleccionada en el mapa');
-      });
+        const map = window.L.map(mapContainerRef.current).setView([defaultLat, defaultLng], coordinates ? 16 : 13);
+        window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '© OpenStreetMap',
+        }).addTo(map);
 
-      mapInstanceRef.current = map;
+        // Clic directo en el mapa ajusta la ubicación exacta (igual que ine-scanner)
+        map.on('click', (e) => {
+          updateMapPin(e.latlng.lat, e.latlng.lng, 'Ubicación seleccionada en el mapa');
+        });
 
-      // Si ya hay coordenadas iniciales (ej. cliente autocompletado)
-      if (coordinates?.lat && coordinates?.lng) {
-        updateMapPin(coordinates.lat, coordinates.lng);
+        mapInstanceRef.current = map;
+
+        // Si ya hay coordenadas iniciales (ej. cliente autocompletado)
+        if (coordinates?.lat && coordinates?.lng) {
+          updateMapPin(coordinates.lat, coordinates.lng);
+        }
+
+        // Forzar cálculo de dimensiones de Leaflet dentro del modal de React
+        map.invalidateSize();
+      } else {
+        mapInstanceRef.current.invalidateSize();
       }
-    }
+    }, 150);
 
     return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-        markerInstanceRef.current = null;
-      }
+      clearTimeout(timer);
     };
-  }, []);
+  }, [deliveryType]);
 
   // ─── Verificación Manual de Dirección / Coordenadas ─────────────────────────
   const handleVerifyAddress = async () => {
@@ -891,7 +896,7 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
                     <div className="bg-slate-50 border-b border-slate-200 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                          <span>📍 Ubicación y Coordenadas GPS</span>
+                          <span>Ubicación y Coordenadas GPS</span>
                           {isVerified ? (
                             <span className="text-[10px] bg-emerald-100 text-emerald-800 font-extrabold px-1.5 py-0.5 rounded border border-emerald-300">
                               Confirmada
@@ -938,7 +943,7 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
                     {/* Pie del Mapa con Coordenadas e Indicador de arrastre */}
                     <div className="bg-slate-50 border-t border-slate-200 px-3.5 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
                       <span className="text-[11px] text-slate-600 font-medium">
-                        💡 Haz clic en el mapa o arrastra el pin rojo para ajustar el punto exacto.
+                        Haz clic en el mapa o arrastra el pin rojo para ajustar el punto exacto.
                       </span>
                       <div className="flex items-center gap-3 font-mono font-bold text-slate-700 text-[11px]">
                         <span>Lat: {coordinates?.lat ? Number(coordinates.lat).toFixed(6) : '---'}</span>
@@ -954,7 +959,7 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
                   </div>
                   <div>
                     <span className="text-xs font-extrabold text-emerald-950 block">
-                      🛍️ Pedido para Recoger en Sucursal (Pickup)
+                      Pedido para Recoger en Sucursal (Pickup)
                     </span>
                     <span className="text-[11px] text-emerald-800 block mt-0.5">
                       No se requiere dirección ni geolocalización. El costo de envío se establece automáticamente en <strong>$0</strong>.

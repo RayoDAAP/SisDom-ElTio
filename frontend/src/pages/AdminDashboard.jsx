@@ -575,12 +575,12 @@ const AdminDashboard = () => {
                                         <>
                                           {activeDriverQueues[order.assignedTo].indexOf(order.id) === 0 && (
                                             <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
-                                              📍 En curso
+                                              En curso
                                             </span>
                                           )}
                                           {activeDriverQueues[order.assignedTo].indexOf(order.id) === 1 && (
                                             <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300">
-                                              ⏳ Siguiente
+                                              Siguiente
                                             </span>
                                           )}
                                         </>
@@ -613,11 +613,11 @@ const AdminDashboard = () => {
                                       </span>
                                       {order.client?.deliveryType === 'recoger' ? (
                                         <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300">
-                                          🛍️ Recoger
+                                          Recoger
                                         </span>
                                       ) : (
                                         <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200">
-                                          🛵 Domicilio
+                                          Domicilio
                                         </span>
                                       )}
                                     </div>
@@ -663,8 +663,8 @@ const AdminDashboard = () => {
                                           title="Clic para cambiar estado de transferencia"
                                         >
                                           {order.payment?.transferStatus === 'aceptada'
-                                            ? 'Aceptada ✓'
-                                            : 'Pendiente ⏳'}
+                                            ? 'Aceptada'
+                                            : 'Pendiente'}
                                         </button>
                                       </div>
                                     ) : (
