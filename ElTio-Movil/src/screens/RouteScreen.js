@@ -332,12 +332,12 @@ export const RouteScreen = () => {
                         <View style={styles.metaItem}>
                           <Clock size={12} color={THEME.colors.textMuted} />
                           <Text style={styles.metaText}>
-                            Esperando: <strong>{stop.waitMinutes} min</strong>
+                            Esperando: <Text style={{ fontWeight: 'bold' }}>{stop.waitMinutes} min</Text>
                           </Text>
                         </View>
                         <View style={styles.metaItem}>
                           <Text style={styles.metaText}>
-                            Llegada est.: <strong>~{stop.estimatedArrivalMinsFromNow} min</strong>
+                            Llegada est.: <Text style={{ fontWeight: 'bold' }}>~{stop.estimatedArrivalMinsFromNow} min</Text>
                           </Text>
                         </View>
                       </View>
@@ -454,7 +454,7 @@ export const RouteScreen = () => {
             </View>
 
             <Text style={styles.modalSubtitle}>
-              Pedido: <strong>{missingTargetOrder?.id}</strong>
+              Pedido: <Text style={{ fontWeight: 'bold' }}>{missingTargetOrder?.id}</Text>
             </Text>
 
             <TextInput
