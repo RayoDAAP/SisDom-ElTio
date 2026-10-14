@@ -107,7 +107,10 @@ const AdminDashboard = () => {
     loadDrivers();
   }, [loadDrivers]);
 
+  const [updatingOrderId, setUpdatingOrderId] = useState(null);
+
   const handleStatusChange = async (orderId, newStatus) => {
+    setUpdatingOrderId(orderId);
     try {
       const updated = await updateOrderStatusRequest(orderId, newStatus);
       setOrders((prev) =>
@@ -118,6 +121,8 @@ const AdminDashboard = () => {
       }
     } catch (err) {
       alert('Error al actualizar el estado: ' + err.message);
+    } finally {
+      setUpdatingOrderId(null);
     }
   };
 
@@ -646,20 +651,28 @@ const AdminDashboard = () => {
                                         <span>{statusConfig.label}</span>
                                       </span>
                                     ) : (
-                                      <select
-                                        value={order.status}
-                                        onChange={(e) =>
-                                          handleStatusChange(order.id, e.target.value)
-                                        }
-                                        className={`text-xs font-bold px-2.5 py-1 rounded-lg border cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-400 ${statusConfig.badgeClass}`}
-                                      >
-                                        <option value="incompleto">Faltante (Urgente)</option>
-                                        <option value="listo">Listo</option>
-                                        <option value="asignado">Asignado</option>
-                                        <option value="en_camino">En Camino</option>
-                                        <option value="entregado">Entregado</option>
-                                        <option value="cancelado">Cancelado</option>
-                                      </select>
+                                      <div className="relative inline-flex items-center">
+                                        <select
+                                          value={order.status}
+                                          disabled={updatingOrderId === order.id}
+                                          onChange={(e) =>
+                                            handleStatusChange(order.id, e.target.value)
+                                          }
+                                          className={`text-xs font-bold px-2.5 py-1 rounded-lg border cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-400 ${statusConfig.badgeClass} ${
+                                            updatingOrderId === order.id ? 'opacity-60 cursor-not-allowed' : ''
+                                          }`}
+                                        >
+                                          <option value="incompleto">Faltante (Urgente)</option>
+                                          <option value="listo">Listo</option>
+                                          <option value="asignado">Asignado</option>
+                                          <option value="en_camino">En Camino</option>
+                                          <option value="entregado">Entregado</option>
+                                          <option value="cancelado">Cancelado</option>
+                                        </select>
+                                        {updatingOrderId === order.id && (
+                                          <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-700 ml-1.5" />
+                                        )}
+                                      </div>
                                     )}
                                   </td>
                                   <td className="p-3 min-w-[150px]">

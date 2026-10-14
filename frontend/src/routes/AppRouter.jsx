@@ -29,8 +29,8 @@ const ProtectedRoute = ({ children }) => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 text-sm">
-        Cargando sistema...
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 gap-3">
+        <div className="w-8 h-8 border-3 border-brand-yellow/30 border-t-brand-yellow rounded-full animate-spin" />
       </div>
     );
   }
@@ -47,8 +47,8 @@ const RoleRoute = ({ children, allowedRoles }) => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 text-sm">
-        Cargando sistema...
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 gap-3">
+        <div className="w-8 h-8 border-3 border-brand-yellow/30 border-t-brand-yellow rounded-full animate-spin" />
       </div>
     );
   }
@@ -70,8 +70,8 @@ const PublicRoute = ({ children }) => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 text-sm">
-        Cargando sistema...
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 gap-3">
+        <div className="w-8 h-8 border-3 border-brand-yellow/30 border-t-brand-yellow rounded-full animate-spin" />
       </div>
     );
   }

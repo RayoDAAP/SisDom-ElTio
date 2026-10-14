@@ -378,27 +378,15 @@ export const RouteScreen = () => {
 
                       {/* Botón de cambio de estado operativo */}
                       <View style={styles.statusActionRow}>
-                        {stop.status === ORDER_STATUS.ON_THE_WAY ? (
-                          <Button
-                            title="Marcar como Entregado"
-                            variant="success"
-                            size="md"
-                            icon={CheckCircle2}
-                            isLoading={isUpdating}
-                            onPress={() => handleStatusChange(stop.orderId, ORDER_STATUS.DELIVERED)}
-                            style={styles.actionBtnFull}
-                          />
-                        ) : (
-                          <Button
-                            title="Iniciar Ruta a esta Parada"
-                            variant="primary"
-                            size="md"
-                            icon={Truck}
-                            isLoading={isUpdating}
-                            onPress={() => handleStatusChange(stop.orderId, ORDER_STATUS.ON_THE_WAY)}
-                            style={styles.actionBtnFull}
-                          />
-                        )}
+                        <Button
+                          title="Marcar como Entregado"
+                          variant="success"
+                          size="md"
+                          icon={CheckCircle2}
+                          isLoading={isUpdating && updatingId === stop.orderId}
+                          onPress={() => handleStatusChange(stop.orderId, ORDER_STATUS.DELIVERED)}
+                          style={styles.actionBtnFull}
+                        />
 
                         {/* Botón Reportar Faltante */}
                         {!isUrgent && (

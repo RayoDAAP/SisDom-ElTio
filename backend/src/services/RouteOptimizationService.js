@@ -163,14 +163,25 @@ export const optimizeDeliveryRoute = (orders = []) => {
     currentLng = nextStop.lng;
   }
 
-  // Generar URL universal de Google Maps con todos los waypoints para navegación completa
+  // Tramo de regreso a la sucursal (D-r1-r2...-D)
+  let returnDistanceKm = 0;
+  let returnDurationMins = 0;
+  if (stops.length > 0) {
+    const lastStop = stops[stops.length - 1];
+    returnDistanceKm = calculateHaversineDistanceKm(lastStop.lat, lastStop.lng, origin.lat, origin.lng);
+    returnDurationMins = Math.max(2, Math.round((returnDistanceKm / AVERAGE_SPEED_KMH) * 60));
+  }
+
+  const grandTotalDistanceKm = Math.round((cumulativeDistanceKm + returnDistanceKm) * 10) / 10;
+  const grandTotalDurationMins = cumulativeDurationMins + returnDurationMins;
+
+  // Generar URL universal de Google Maps con circuito cerrado: sale de la sucursal, visita paradas y regresa a la sucursal
   let googleMapsUrl = '';
   if (stops.length === 1) {
-    googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin.lat},${origin.lng}&destination=${stops[0].lat},${stops[0].lng}`;
+    googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin.lat},${origin.lng}&destination=${origin.lat},${origin.lng}&waypoints=${stops[0].lat},${stops[0].lng}`;
   } else if (stops.length > 1) {
-    const destination = stops[stops.length - 1];
-    const waypoints = stops.slice(0, -1).map((s) => `${s.lat},${s.lng}`).join('|');
-    googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin.lat},${origin.lng}&destination=${destination.lat},${destination.lng}&waypoints=${encodeURIComponent(
+    const waypoints = stops.map((s) => `${s.lat},${s.lng}`).join('|');
+    googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin.lat},${origin.lng}&destination=${origin.lat},${origin.lng}&waypoints=${encodeURIComponent(
       waypoints
     )}`;
   }
@@ -179,8 +190,10 @@ export const optimizeDeliveryRoute = (orders = []) => {
     origin,
     stops,
     totalOrders: stops.length,
-    totalDistanceKm: Math.round(cumulativeDistanceKm * 10) / 10,
-    totalEstimatedDurationMins: cumulativeDurationMins,
+    deliveriesDistanceKm: Math.round(cumulativeDistanceKm * 10) / 10,
+    returnDistanceKm: Math.round(returnDistanceKm * 10) / 10,
+    totalDistanceKm: grandTotalDistanceKm,
+    totalEstimatedDurationMins: grandTotalDurationMins,
     googleMapsUrl,
     generatedAt: new Date().toISOString(),
   };

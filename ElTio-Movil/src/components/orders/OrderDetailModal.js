@@ -56,8 +56,13 @@ export const OrderDetailModal = ({
   };
 
   const handleOpenMap = () => {
-    const query = encodeURIComponent(`${fullAddress}, Chihuahua`);
-    Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
+    if (client?.lat && client?.lng) {
+      Linking.openURL(`https://www.google.com/maps?q=${client.lat},${client.lng}`);
+    } else {
+      const mun = client?.municipio || 'San Nicolás de los Garza';
+      const query = encodeURIComponent(`${fullAddress}, ${mun}, Nuevo León, México`);
+      Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
+    }
   };
 
   return (
@@ -335,9 +340,7 @@ export const OrderDetailModal = ({
           ) : (
             <View style={styles.modalLockedContainer}>
               <Lock size={14} color={THEME.colors.slate500} />
-              <Text style={styles.modalLockedText}>
-                Pedido finalizado ({statusCfg.label}) — Estado bloqueado
-              </Text>
+              <Text style={styles.modalLockedText}>{statusCfg.label}</Text>
             </View>
           )}
         </View>

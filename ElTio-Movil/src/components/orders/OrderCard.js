@@ -46,11 +46,16 @@ export const OrderCard = ({
   };
 
   const handleOpenMap = () => {
+    if (client?.lat && client?.lng) {
+      Linking.openURL(`https://www.google.com/maps?q=${client.lat},${client.lng}`);
+      return;
+    }
     if (!client?.street && !client?.colonia) {
       Alert.alert('Aviso', 'Dirección no especificada');
       return;
     }
-    const query = encodeURIComponent(`${fullAddress}, Chihuahua`);
+    const mun = client?.municipio || 'San Nicolás de los Garza';
+    const query = encodeURIComponent(`${fullAddress}, ${mun}, Nuevo León, México`);
     Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
   };
 
@@ -190,7 +195,7 @@ export const OrderCard = ({
         {isLocked ? (
           <View style={styles.lockedBadgeContainer}>
             <Lock size={12} color={THEME.colors.slate500} />
-            <Text style={styles.lockedBadgeText}>Finalizado (Bloqueado)</Text>
+            <Text style={styles.lockedBadgeText}>{statusCfg.label}</Text>
           </View>
         ) : (
           <View style={styles.activeActionsContainer}>

@@ -247,7 +247,7 @@ export const assignOrder = async (id, driverId) => {
     assigned_to: driver.id,
     assigned_to_name: driver.name,
     assigned_at: new Date().toISOString(),
-    status: order.status === ORDER_STATUS.READY ? ORDER_STATUS.ASSIGNED : order.status,
+    status: ORDER_STATUS.ON_THE_WAY,
   };
 
   const { data, error } = await supabase

@@ -5,7 +5,7 @@
  *              Complementos y Métodos de Pago.
  *              Soporta la propiedad `hideFinancials` para usuarios con rol Auxiliar (oculta totales de venta).
  */
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   X,
   User,
@@ -38,6 +38,8 @@ const OrderDetailModal = ({
   onPaymentStatusChange,
   hideFinancials = false,
 }) => {
+  const [isUpdatingPayment, setIsUpdatingPayment] = useState(false);
+
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') onClose();
@@ -100,7 +102,7 @@ const OrderDetailModal = ({
               {isLocked ? (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-200 text-slate-700 text-xs font-bold">
                   <Lock className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Finalizado (No editable)</span>
+                  <span>{statusConfig.label}</span>
                 </span>
               ) : (
                 <select
@@ -410,15 +412,23 @@ const OrderDetailModal = ({
                     {onPaymentStatusChange && !hideFinancials && (
                       <button
                         type="button"
-                        onClick={() =>
-                          onPaymentStatusChange(
-                            id,
-                            payment.transferStatus === TRANSFER_STATUS.ACCEPTED ? 'pendiente' : 'aceptada'
-                          )
-                        }
-                        className="text-[11px] font-bold px-2 py-0.5 rounded bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                        disabled={isUpdatingPayment}
+                        onClick={async () => {
+                          setIsUpdatingPayment(true);
+                          try {
+                            await onPaymentStatusChange(
+                              id,
+                              payment.transferStatus === TRANSFER_STATUS.ACCEPTED ? 'pendiente' : 'aceptada'
+                            );
+                          } finally {
+                            setIsUpdatingPayment(false);
+                          }
+                        }}
+                        className={`text-[11px] font-bold px-2 py-0.5 rounded bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center gap-1 ${
+                          isUpdatingPayment ? 'opacity-60 cursor-not-allowed' : ''
+                        }`}
                       >
-                        Marcar como {payment.transferStatus === TRANSFER_STATUS.ACCEPTED ? 'Pendiente' : 'Aceptada'}
+                        {isUpdatingPayment ? 'Actualizando...' : `Marcar como ${payment.transferStatus === TRANSFER_STATUS.ACCEPTED ? 'Pendiente' : 'Aceptada'}`}
                       </button>
                     )}
                   </div>

@@ -632,7 +632,10 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
                   label="Teléfono (Búsqueda automática)"
                   type="tel"
                   value={clientPhone}
-                  onChange={(e) => handlePhoneChange(e.target.value)}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    handlePhoneChange(digits);
+                  }}
                   placeholder="6141234567"
                   icon={Phone}
                   required
@@ -768,51 +771,91 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
                 placeholder="Casa blanca, portón negro, al lado del Oxxo"
               />
 
-              {/* Caja de Verificación de Coordenadas */}
+              {/* Verificación de Dirección / Vista de Mapa */}
               {isVerified && coordinates ? (
-                <div className="sm:col-span-2 md:col-span-3 bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2 transition-all">
-                  <div className="flex items-center gap-2.5">
-                    <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
-                    <div>
-                      <span className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
-                        <span>📍 Dirección Verificada</span>
-                        <span className="text-[10px] bg-emerald-200 text-emerald-800 px-1.5 py-0.5 rounded font-black">
-                          Lista para GPS
-                        </span>
-                      </span>
-                      <span className="text-[11px] text-emerald-700 block mt-0.5">
-                        Coordenadas: {coordinates.lat.toFixed(5)}, {coordinates.lng.toFixed(5)} — Se guardarán en el historial del cliente
-                      </span>
-                    </div>
+                <div className="sm:col-span-2 md:col-span-3 rounded-xl overflow-hidden border border-emerald-300 shadow-sm">
+                  {/* Mini mapa */}
+                  <div className="relative w-full h-36 bg-slate-200">
+                    <img
+                      src={`https://maps.googleapis.com/maps/api/staticmap?center=${coordinates.lat},${coordinates.lng}&zoom=16&size=640x144&markers=color:red%7C${coordinates.lat},${coordinates.lng}&scale=2&key=`}
+                      alt="Mapa de ubicación"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        // Fallback: iframe de OpenStreetMap si Google Maps falla (sin API key)
+                        e.target.style.display = 'none';
+                        e.target.nextSibling.style.display = 'block';
+                      }}
+                    />
+                    <iframe
+                      title="Mapa"
+                      style={{ display: 'none' }}
+                      width="100%"
+                      height="144"
+                      frameBorder="0"
+                      src={`https://www.openstreetmap.org/export/embed.html?bbox=${coordinates.lng - 0.003},${coordinates.lat - 0.002},${coordinates.lng + 0.003},${coordinates.lat + 0.002}&layer=mapnik&marker=${coordinates.lat},${coordinates.lng}`}
+                    />
+                    <a
+                      href={`https://www.google.com/maps?q=${coordinates.lat},${coordinates.lng}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm text-xs font-bold text-slate-700 px-2 py-1 rounded-lg shadow hover:bg-white transition-colors flex items-center gap-1"
+                    >
+                      <Navigation className="w-3 h-3 text-brand-red" />
+                      Abrir en Maps
+                    </a>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleVerifyAddress}
-                    disabled={isGeocoding}
-                    className="text-xs text-emerald-800 hover:text-emerald-950 font-bold underline cursor-pointer"
-                  >
-                    {isGeocoding ? 'Actualizando...' : 'Re-verificar'}
-                  </button>
+                  {/* Footer del mapa */}
+                  <div className="bg-emerald-50 border-t border-emerald-200 px-3 py-2 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <div>
+                        <span className="text-xs font-bold text-emerald-900">📍 Dirección Verificada</span>
+                        <span className="text-[11px] text-emerald-700 block">
+                          {coordinates.lat.toFixed(5)}, {coordinates.lng.toFixed(5)}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleVerifyAddress}
+                      disabled={isGeocoding}
+                      className="text-xs text-emerald-800 hover:text-emerald-950 font-bold underline cursor-pointer shrink-0"
+                    >
+                      {isGeocoding ? 'Actualizando...' : 'Re-verificar'}
+                    </button>
+                  </div>
                 </div>
               ) : (
-                <div className="sm:col-span-2 md:col-span-3 bg-slate-100/90 border border-slate-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 text-slate-600">
-                    <Compass className="w-4 h-4 text-slate-400 shrink-0" />
-                    <span className="text-xs font-medium">
-                      Verifica las coordenadas para que la app móvil del chofer trace la ruta óptima.
-                    </span>
+                <div className="sm:col-span-2 md:col-span-3 rounded-xl overflow-hidden border border-slate-200 shadow-sm">
+                  {/* Mapa placeholder en gris */}
+                  <div className="relative w-full h-28 bg-slate-100 flex items-center justify-center">
+                    <iframe
+                      title="Mapa referencia"
+                      width="100%"
+                      height="112"
+                      frameBorder="0"
+                      className="grayscale opacity-50"
+                      src={`https://www.openstreetmap.org/export/embed.html?bbox=-100.248,-100.238,25.730,25.740&layer=mapnik`}
+                    />
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-900/40 backdrop-blur-xs">
+                      <Compass className="w-6 h-6 text-white/70" />
+                      <span className="text-xs text-white font-semibold drop-shadow">Sin coordenadas verificadas</span>
+                    </div>
                   </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    icon={Navigation}
-                    isLoading={isGeocoding}
-                    onClick={handleVerifyAddress}
-                    className="bg-white border-slate-300 text-slate-800 hover:bg-slate-50 text-xs font-semibold"
-                  >
-                    Verificar Dirección
-                  </Button>
+                  <div className="bg-slate-50 border-t border-slate-200 px-3 py-2 flex items-center justify-between gap-2">
+                    <span className="text-xs text-slate-500 font-medium">Ubica la dirección en el mapa</span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      icon={Navigation}
+                      isLoading={isGeocoding}
+                      onClick={handleVerifyAddress}
+                      className="bg-white border-slate-300 text-slate-800 hover:bg-slate-50 text-xs font-semibold shrink-0"
+                    >
+                      Verificar Dirección
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
