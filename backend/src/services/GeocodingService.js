@@ -45,7 +45,23 @@ export const COLONIAS_COORDINATES = {
 };
 
 /**
- * Normaliza nombres para búsqueda en catálogos.
+ * Limpia y normaliza prefijos comunes de calle/colonia/número (idéntico a INE Scanner).
+ * @param {string} str
+ * @returns {string}
+ */
+const cleanPrefixes = (str) => {
+  if (!str) return '';
+  return str
+    .replace(/^COL\.?\s*|^COLONIA\s+/i, '')
+    .replace(/^C\.?\s*|^CALLE\s+/i, '')
+    .replace(/^NO\.?\s*|^NUM\.?\s*|^#\s*/i, '')
+    .replace(/interior.*$/i, '')
+    .replace(/int.*$/i, '')
+    .trim();
+};
+
+/**
+ * Normaliza nombres para búsqueda en catálogos locales.
  * @param {string} text
  * @returns {string}
  */
@@ -59,8 +75,53 @@ const cleanText = (text) => {
 };
 
 /**
- * Consulta las coordenadas de una dirección utilizando OpenStreetMap Nominatim.
- * Si falla o no encuentra resultados, recurre al catálogo local de contingencia.
+ * Consulta directa a Nominatim con limit 1 y filtro por México.
+ * @param {string} query
+ * @returns {Promise<{ lat: number, lng: number, displayName: string } | null>}
+ */
+const queryNominatim = async (query) => {
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+      query
+    )}&limit=1&countrycodes=mx`;
+
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'TacosElTio-DeliveryApp/1.0 (contacto@eltio.com)',
+      },
+    });
+
+    if (!response.ok) return null;
+    const data = await response.json();
+
+    if (data && data.length > 0) {
+      let lat = parseFloat(data[0].lat);
+      let lon = parseFloat(data[0].lon);
+      if (lon > 0) lon = -lon; // Asegurar signo negativo en longitud para México
+
+      // Validar que esté dentro de límites de Nuevo León / México
+      if (lat >= 24.0 && lat <= 28.0 && lon >= -101.5 && lon <= -99.0) {
+        return {
+          lat: parseFloat(lat.toFixed(6)),
+          lng: parseFloat(lon.toFixed(6)),
+          displayName: data[0].display_name,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('[GeocodingService] Query error for:', query, err.message);
+  }
+  return null;
+};
+
+/**
+ * Geocodifica una dirección con algoritmo de aproximación progresiva idéntico al de INE Scanner:
+ * 1. Calle + Número + Colonia + Municipio + NL
+ * 2. Calle + Número + Municipio + NL
+ * 3. Calle + Municipio + NL
+ * 4. Colonia + Municipio + NL
+ * 5. Municipio + NL
+ * 6. Fallback a catálogo local o sucursal
  *
  * @param {object} addressData
  * @param {string} addressData.street - Calle
@@ -77,84 +138,72 @@ export const geocodeAddress = async ({
   municipio = 'San Nicolás de los Garza',
   crossStreets = '',
 }) => {
-  const cleanMun = cleanText(municipio) || 'san nicolas de los garza';
-  const cleanCol = cleanText(colonia);
-  const cleanStr = cleanText(street);
+  const cCalle = cleanPrefixes(street);
+  const cNumero = cleanPrefixes(number);
+  const cColonia = cleanPrefixes(colonia);
+  const mun = municipio?.trim() || 'San Nicolás de los Garza';
 
-  // 1. Intentar geocodificar vía OpenStreetMap Nominatim
-  try {
-    const fullQueryParts = [];
-    if (street) fullQueryParts.push(`${street} ${number}`.trim());
-    if (colonia) fullQueryParts.push(`Colonia ${colonia}`);
-    if (municipio) fullQueryParts.push(municipio);
-    fullQueryParts.push('Nuevo León', 'México');
-
-    const query = fullQueryParts.join(', ');
-    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-      query
-    )}&addressdetails=1&countrycodes=mx&limit=1`;
-
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'TacosElTio-DeliveryApp/1.0 (contacto@eltio.com)',
-      },
-    });
-
-    if (response.ok) {
-      const results = await response.json();
-      if (results && results.length > 0) {
-        const item = results[0];
-        const lat = parseFloat(item.lat);
-        const lng = parseFloat(item.lon);
-
-        // Validar que esté dentro de los límites razonables de Nuevo León
-        if (lat >= 24.5 && lat <= 27.5 && lng >= -101.5 && lng <= -99.0) {
-          return {
-            lat,
-            lng,
-            displayName: item.display_name,
-            isApproximate: false,
-          };
-        }
-      }
-    }
-  } catch (err) {
-    console.warn('[GeocodingService] Error al consultar Nominatim:', err.message);
+  // Intento 1: Dirección completa (Calle + Número + Colonia + Municipio + NL)
+  if (cCalle && cColonia) {
+    const q1 = `${cCalle} ${cNumero}, ${cColonia}, ${mun}, Nuevo León, México`.replace(/\s+,/g, ',').trim();
+    const r1 = await queryNominatim(q1);
+    if (r1) return { ...r1, isApproximate: false };
   }
 
-  // 2. Fallback inteligente usando catálogo local de colonias o municipios de NL
-  let fallbackCoords = null;
-  let label = '';
+  // Intento 2: Calle + Número + Municipio + NL
+  if (cCalle && cNumero) {
+    const q2 = `${cCalle} ${cNumero}, ${mun}, Nuevo León, México`.trim();
+    const r2 = await queryNominatim(q2);
+    if (r2) return { ...r2, isApproximate: false };
+  }
+
+  // Intento 3: Calle sola + Municipio + NL (idéntico a INE Scanner)
+  if (cCalle) {
+    const q3 = `${cCalle}, ${mun}, Nuevo León, México`.trim();
+    const r3 = await queryNominatim(q3);
+    if (r3) return { ...r3, isApproximate: false };
+  }
+
+  // Intento 4: Colonia + Municipio + NL
+  if (cColonia) {
+    const q4 = `${cColonia}, ${mun}, Nuevo León, México`.trim();
+    const r4 = await queryNominatim(q4);
+    if (r4) return { ...r4, isApproximate: true };
+  }
+
+  // Intento 5: Municipio + NL
+  const q5 = `${mun}, Nuevo León, México`.trim();
+  const r5 = await queryNominatim(q5);
+  if (r5) return { ...r5, isApproximate: true };
+
+  // Fallback a catálogos locales si no hay conexión externa
+  const cleanCol = cleanText(colonia);
+  const cleanMun = cleanText(municipio);
 
   if (cleanCol && COLONIAS_COORDINATES[cleanCol]) {
-    fallbackCoords = COLONIAS_COORDINATES[cleanCol];
-    label = `${colonia}, ${municipio}, N.L. (Aproximada por Colonia)`;
-  } else if (cleanMun && MUNICIPIOS_COORDINATES[cleanMun]) {
-    fallbackCoords = MUNICIPIOS_COORDINATES[cleanMun];
-    label = `${municipio}, N.L. (Aproximada por Municipio)`;
-  } else {
-    // Si nada coincide, usar la sucursal de Tacos El Tío
-    fallbackCoords = {
-      lat: env.BRANCH_LOCATION.lat,
-      lng: env.BRANCH_LOCATION.lng,
+    const c = COLONIAS_COORDINATES[cleanCol];
+    return {
+      lat: c.lat,
+      lng: c.lng,
+      displayName: `${colonia}, ${mun}, N.L. (Catálogo Colonia)`,
+      isApproximate: true,
     };
-    label = `${env.BRANCH_LOCATION.name} (Referencia inicial)`;
   }
 
-  // Generar un pequeño desplazamiento pseudo-aleatorio determinista basado en el número de calle
-  // para que dos casas de la misma colonia no queden encimadas en el mapa
-  let offsetLat = 0;
-  let offsetLng = 0;
-  if (number) {
-    const num = parseInt(number.replace(/\D/g, ''), 10) || 100;
-    offsetLat = ((num % 20) - 10) * 0.00015;
-    offsetLng = (((num * 3) % 20) - 10) * 0.00015;
+  if (cleanMun && MUNICIPIOS_COORDINATES[cleanMun]) {
+    const c = MUNICIPIOS_COORDINATES[cleanMun];
+    return {
+      lat: c.lat,
+      lng: c.lng,
+      displayName: `${mun}, N.L. (Centro Municipal)`,
+      isApproximate: true,
+    };
   }
 
   return {
-    lat: fallbackCoords.lat + offsetLat,
-    lng: fallbackCoords.lng + offsetLng,
-    displayName: label,
+    lat: env.BRANCH_LOCATION.lat,
+    lng: env.BRANCH_LOCATION.lng,
+    displayName: `${env.BRANCH_LOCATION.name} (Referencia Sucursal)`,
     isApproximate: true,
   };
 };

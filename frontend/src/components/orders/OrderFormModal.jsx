@@ -10,7 +10,7 @@
  *              - Complementos a $4 (default 0) y paquetes de tortillas ($7, $9, $15, $30).
  *              - Métodos de pago: Efectivo (cálculo de cambio en tiempo real) y Transferencia (pendiente / aceptada).
  */
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   X,
   User,
@@ -78,6 +78,10 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
   const [isVerified, setIsVerified] = useState(false);
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [geocodeResult, setGeocodeResult] = useState(null);
+
+  const mapContainerRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const markerInstanceRef = useRef(null);
 
   const [isSearchingClient, setIsSearchingClient] = useState(false);
   const [clientFound, setClientFound] = useState(false);
@@ -170,6 +174,73 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
     }
   }, []);
 
+  // Función para mover el pin y actualizar coordenadas (idéntico a ine-scanner)
+  const updateMapPin = useCallback((lat, lng, labelText = '') => {
+    let nLat = parseFloat(lat);
+    let nLng = parseFloat(lng);
+    if (isNaN(nLat) || isNaN(nLng)) return;
+    if (nLng > 0) nLng = -nLng; // Asegurar signo negativo en longitud en México
+
+    setCoordinates({ lat: nLat, lng: nLng });
+    setIsVerified(true);
+
+    if (!mapInstanceRef.current || !window.L) return;
+
+    const latLng = [nLat, nLng];
+
+    if (!markerInstanceRef.current) {
+      markerInstanceRef.current = window.L.marker(latLng, { draggable: true }).addTo(mapInstanceRef.current);
+      markerInstanceRef.current.on('dragend', (e) => {
+        const pos = e.target.getLatLng();
+        let dragLat = parseFloat(pos.lat.toFixed(6));
+        let dragLng = pos.lng > 0 ? -pos.lng : pos.lng;
+        dragLng = parseFloat(dragLng.toFixed(6));
+        setCoordinates({ lat: dragLat, lng: dragLng });
+        setIsVerified(true);
+      });
+    } else {
+      markerInstanceRef.current.setLatLng(latLng);
+    }
+
+    mapInstanceRef.current.setView(latLng, 16);
+  }, []);
+
+  // Inicializar mapa de Leaflet una vez montado el contenedor
+  useEffect(() => {
+    if (!mapContainerRef.current || !window.L) return;
+
+    if (!mapInstanceRef.current) {
+      const defaultLat = coordinates?.lat || 25.7428;
+      const defaultLng = coordinates?.lng || -100.2872;
+
+      const map = window.L.map(mapContainerRef.current).setView([defaultLat, defaultLng], coordinates ? 16 : 13);
+      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© OpenStreetMap',
+      }).addTo(map);
+
+      // Clic directo en el mapa ajusta la ubicación exacta (igual que ine-scanner)
+      map.on('click', (e) => {
+        updateMapPin(e.latlng.lat, e.latlng.lng, 'Ubicación seleccionada en el mapa');
+      });
+
+      mapInstanceRef.current = map;
+
+      // Si ya hay coordenadas iniciales (ej. cliente autocompletado)
+      if (coordinates?.lat && coordinates?.lng) {
+        updateMapPin(coordinates.lat, coordinates.lng);
+      }
+    }
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+        markerInstanceRef.current = null;
+      }
+    };
+  }, []);
+
   // ─── Verificación Manual de Dirección / Coordenadas ─────────────────────────
   const handleVerifyAddress = async () => {
     if (!street.trim()) {
@@ -190,10 +261,11 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
         setCoordinates({ lat: res.lat, lng: res.lng });
         setGeocodeResult(res);
         setIsVerified(true);
+        updateMapPin(res.lat, res.lng, res.displayName);
       }
     } catch (err) {
       console.error('Error al geocodificar dirección:', err);
-      setErrorMsg('No se pudo verificar la dirección automáticamente. Puedes continuar de todos modos.');
+      setErrorMsg('No se pudo verificar la dirección automáticamente. Haz clic directo en el mapa para ubicar el punto.');
     } finally {
       setIsGeocoding(false);
     }
@@ -771,79 +843,25 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
                 placeholder="Casa blanca, portón negro, al lado del Oxxo"
               />
 
-              {/* Verificación de Dirección / Vista de Mapa */}
-              {isVerified && coordinates ? (
-                <div className="sm:col-span-2 md:col-span-3 rounded-xl overflow-hidden border border-emerald-300 shadow-sm">
-                  {/* Mini mapa */}
-                  <div className="relative w-full h-36 bg-slate-200">
-                    <img
-                      src={`https://maps.googleapis.com/maps/api/staticmap?center=${coordinates.lat},${coordinates.lng}&zoom=16&size=640x144&markers=color:red%7C${coordinates.lat},${coordinates.lng}&scale=2&key=`}
-                      alt="Mapa de ubicación"
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        // Fallback: iframe de OpenStreetMap si Google Maps falla (sin API key)
-                        e.target.style.display = 'none';
-                        e.target.nextSibling.style.display = 'block';
-                      }}
-                    />
-                    <iframe
-                      title="Mapa"
-                      style={{ display: 'none' }}
-                      width="100%"
-                      height="144"
-                      frameBorder="0"
-                      src={`https://www.openstreetmap.org/export/embed.html?bbox=${coordinates.lng - 0.003},${coordinates.lat - 0.002},${coordinates.lng + 0.003},${coordinates.lat + 0.002}&layer=mapnik&marker=${coordinates.lat},${coordinates.lng}`}
-                    />
-                    <a
-                      href={`https://www.google.com/maps?q=${coordinates.lat},${coordinates.lng}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm text-xs font-bold text-slate-700 px-2 py-1 rounded-lg shadow hover:bg-white transition-colors flex items-center gap-1"
-                    >
-                      <Navigation className="w-3 h-3 text-brand-red" />
-                      Abrir en Maps
-                    </a>
-                  </div>
-                  {/* Footer del mapa */}
-                  <div className="bg-emerald-50 border-t border-emerald-200 px-3 py-2 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <div>
-                        <span className="text-xs font-bold text-emerald-900">📍 Dirección Verificada</span>
-                        <span className="text-[11px] text-emerald-700 block">
-                          {coordinates.lat.toFixed(5)}, {coordinates.lng.toFixed(5)}
+              {/* Verificación de Dirección con Mapa Interactivo (estilo INE Scanner) */}
+              <div className="sm:col-span-2 md:col-span-3 rounded-xl overflow-hidden border border-slate-300 shadow-sm bg-white">
+                <div className="bg-slate-50 border-b border-slate-200 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <span>📍 Ubicación y Coordenadas GPS</span>
+                      {isVerified ? (
+                        <span className="text-[10px] bg-emerald-100 text-emerald-800 font-extrabold px-1.5 py-0.5 rounded border border-emerald-300">
+                          Confirmada
                         </span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleVerifyAddress}
-                      disabled={isGeocoding}
-                      className="text-xs text-emerald-800 hover:text-emerald-950 font-bold underline cursor-pointer shrink-0"
-                    >
-                      {isGeocoding ? 'Actualizando...' : 'Re-verificar'}
-                    </button>
+                      ) : (
+                        <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded border border-amber-300">
+                          Sin verificar
+                        </span>
+                      )}
+                    </span>
                   </div>
-                </div>
-              ) : (
-                <div className="sm:col-span-2 md:col-span-3 rounded-xl overflow-hidden border border-slate-200 shadow-sm">
-                  {/* Mapa placeholder en gris */}
-                  <div className="relative w-full h-28 bg-slate-100 flex items-center justify-center">
-                    <iframe
-                      title="Mapa referencia"
-                      width="100%"
-                      height="112"
-                      frameBorder="0"
-                      className="grayscale opacity-50"
-                      src={`https://www.openstreetmap.org/export/embed.html?bbox=-100.248,-100.238,25.730,25.740&layer=mapnik`}
-                    />
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-900/40 backdrop-blur-xs">
-                      <Compass className="w-6 h-6 text-white/70" />
-                      <span className="text-xs text-white font-semibold drop-shadow">Sin coordenadas verificadas</span>
-                    </div>
-                  </div>
-                  <div className="bg-slate-50 border-t border-slate-200 px-3 py-2 flex items-center justify-between gap-2">
-                    <span className="text-xs text-slate-500 font-medium">Ubica la dirección en el mapa</span>
+
+                  <div className="flex items-center gap-2">
                     <Button
                       type="button"
                       variant="outline"
@@ -851,13 +869,40 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
                       icon={Navigation}
                       isLoading={isGeocoding}
                       onClick={handleVerifyAddress}
-                      className="bg-white border-slate-300 text-slate-800 hover:bg-slate-50 text-xs font-semibold shrink-0"
+                      className="bg-white border-slate-300 text-slate-800 hover:bg-slate-100 text-xs font-bold"
                     >
-                      Verificar Dirección
+                      {isVerified ? 'Re-geocodificar' : 'Geocodificar Dirección'}
                     </Button>
                   </div>
                 </div>
-              )}
+
+                {/* Contenedor del Mapa Leaflet Interactivo */}
+                <div className="relative w-full h-52 bg-slate-100">
+                  <div ref={mapContainerRef} className="w-full h-full z-0" />
+                  {coordinates && (
+                    <a
+                      href={`https://www.google.com/maps?q=${coordinates.lat},${coordinates.lng}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="absolute top-2 right-2 z-10 bg-white/90 backdrop-blur-xs text-[11px] font-bold text-slate-700 px-2.5 py-1 rounded-lg shadow-sm hover:bg-white transition-colors flex items-center gap-1 border border-slate-200"
+                    >
+                      <Navigation className="w-3 h-3 text-brand-red" />
+                      Google Maps
+                    </a>
+                  )}
+                </div>
+
+                {/* Pie del Mapa con Coordenadas e Indicador de arrastre */}
+                <div className="bg-slate-50 border-t border-slate-200 px-3.5 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <span className="text-[11px] text-slate-600 font-medium">
+                    💡 Haz clic en el mapa o arrastra el pin rojo para ajustar el punto exacto.
+                  </span>
+                  <div className="flex items-center gap-3 font-mono font-bold text-slate-700 text-[11px]">
+                    <span>Lat: {coordinates?.lat ? Number(coordinates.lat).toFixed(6) : '---'}</span>
+                    <span>Lng: {coordinates?.lng ? Number(coordinates.lng).toFixed(6) : '---'}</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </section>
 
