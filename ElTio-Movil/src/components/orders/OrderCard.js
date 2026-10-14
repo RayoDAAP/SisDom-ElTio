@@ -107,21 +107,33 @@ export const OrderCard = ({
         ) : null}
       </View>
 
-      {/* Dirección con acceso a Mapa */}
-      <TouchableOpacity
-        onPress={handleOpenMap}
-        activeOpacity={0.7}
-        style={styles.addressContainer}
-      >
-        <MapPin size={16} color={THEME.colors.brandRed} style={styles.addressIcon} />
-        <View style={styles.addressTextWrapper}>
-          <Text style={styles.addressText} numberOfLines={2}>
-            {fullAddress}
-          </Text>
-          <Text style={styles.mapHint}>Toca para abrir en Google Maps</Text>
+      {/* Dirección con acceso a Mapa o Aviso de Recoger en Sucursal */}
+      {client?.deliveryType === 'recoger' ? (
+        <View style={[styles.addressContainer, { backgroundColor: '#FEF3C7', borderColor: '#FCD34D' }]}>
+          <Navigation size={16} color="#92400E" style={styles.addressIcon} />
+          <View style={styles.addressTextWrapper}>
+            <Text style={[styles.addressText, { color: '#92400E', fontWeight: 'bold' }]}>
+              🛍️ Pasa a recoger en sucursal
+            </Text>
+            <Text style={[styles.mapHint, { color: '#B45309' }]}>Pedido de mostrador / pickup</Text>
+          </View>
         </View>
-        <Navigation size={14} color={THEME.colors.slate400} />
-      </TouchableOpacity>
+      ) : (
+        <TouchableOpacity
+          onPress={handleOpenMap}
+          activeOpacity={0.7}
+          style={styles.addressContainer}
+        >
+          <MapPin size={16} color={THEME.colors.brandRed} style={styles.addressIcon} />
+          <View style={styles.addressTextWrapper}>
+            <Text style={styles.addressText} numberOfLines={2}>
+              {fullAddress}
+            </Text>
+            <Text style={styles.mapHint}>Toca para abrir en Google Maps</Text>
+          </View>
+          <Navigation size={14} color={THEME.colors.slate400} />
+        </TouchableOpacity>
+      )}
 
       {/* Notas de Entrega si existen */}
       {notes ? (

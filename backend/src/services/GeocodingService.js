@@ -74,13 +74,23 @@ const cleanText = (text) => {
     .trim();
 };
 
+let lastRequestTime = 0;
+
 /**
- * Consulta directa a Nominatim con limit 1 y filtro por México.
+ * Consulta directa a Nominatim con limit 1, control de frecuencia y reintentos ante rate-limit.
  * @param {string} query
  * @returns {Promise<{ lat: number, lng: number, displayName: string } | null>}
  */
 const queryNominatim = async (query) => {
   try {
+    // Respetar política de uso de Nominatim (mínimo 800ms entre consultas consecutivas)
+    const now = Date.now();
+    const elapsed = now - lastRequestTime;
+    if (elapsed < 800) {
+      await new Promise((resolve) => setTimeout(resolve, 800 - elapsed));
+    }
+    lastRequestTime = Date.now();
+
     const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
       query
     )}&limit=1&countrycodes=mx`;
@@ -90,6 +100,30 @@ const queryNominatim = async (query) => {
         'User-Agent': 'TacosElTio-DeliveryApp/1.0 (contacto@eltio.com)',
       },
     });
+
+    if (response.status === 429) {
+      // Si nos pide esperar, aguardar 1.2 segundos y reintentar 1 vez
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      lastRequestTime = Date.now();
+      const retryRes = await fetch(url, {
+        headers: { 'User-Agent': 'TacosElTio-DeliveryApp/1.0 (contacto@eltio.com)' },
+      });
+      if (!retryRes.ok) return null;
+      const data = await retryRes.json();
+      if (data && data.length > 0) {
+        let lat = parseFloat(data[0].lat);
+        let lon = parseFloat(data[0].lon);
+        if (lon > 0) lon = -lon;
+        if (lat >= 24.0 && lat <= 28.0 && lon >= -101.5 && lon <= -99.0) {
+          return {
+            lat: parseFloat(lat.toFixed(6)),
+            lng: parseFloat(lon.toFixed(6)),
+            displayName: data[0].display_name,
+          };
+        }
+      }
+      return null;
+    }
 
     if (!response.ok) return null;
     const data = await response.json();

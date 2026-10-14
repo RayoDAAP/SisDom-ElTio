@@ -63,6 +63,9 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
+  // ─── Tipo de Pedido: 'domicilio' (con envío y mapa) o 'recoger' (pickup en sucursal sin costo) ─
+  const [deliveryType, setDeliveryType] = useState('domicilio');
+
   // ─── Estado del Cliente y Geolocalización ──────────────────────────────────
   const [clientType, setClientType] = useState('particular');
   const [clientName, setClientName] = useState('');
@@ -449,10 +452,10 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
 
     const extrasTotal = redTotal + greenTotal + onionTotal + tortillasTotal;
 
-    // 6. Subtotal y Total
+    // 6. Subtotal y Total (si pasa a recoger no lleva costo de envío)
     const subtotal =
       preparedItemsTotal + barbacoaTotal + menudoTotal + drinksTotal + extrasTotal;
-    const fee = Number(shippingFee) || 0;
+    const fee = deliveryType === 'recoger' ? 0 : Number(shippingFee) || 0;
     const total = subtotal + fee;
 
     // 7. Cálculo de Cambio en Efectivo
@@ -584,21 +587,25 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
           paymentMethod === PAYMENT_METHODS.TRANSFERENCIA ? transferStatus : null,
       };
 
+      const isPickup = deliveryType === 'recoger';
+
       const orderData = {
+        deliveryType, // 'domicilio' | 'recoger'
         client: {
+          deliveryType,
           type: clientType,
           name: clientName,
           phone: clientPhone,
           companyName: clientType === 'empresa' ? companyName : '',
-          street,
-          number,
-          colonia,
-          municipio,
-          crossStreets,
-          deliveryReferences,
-          lat: coordinates?.lat || null,
-          lng: coordinates?.lng || null,
-          isVerified,
+          street: isPickup ? 'Pasa a recoger en sucursal' : street,
+          number: isPickup ? 'S/N' : number,
+          colonia: isPickup ? 'Sucursal San Nicolás' : colonia,
+          municipio: isPickup ? 'San Nicolás de los Garza' : municipio,
+          crossStreets: isPickup ? '' : crossStreets,
+          deliveryReferences: isPickup ? (notes || 'Pasa a recoger') : deliveryReferences,
+          lat: isPickup ? 25.73464270666944 : (coordinates?.lat || null),
+          lng: isPickup ? -100.24216940421442 : (coordinates?.lng || null),
+          isVerified: isPickup ? true : isVerified,
         },
         items,
         payment,
@@ -670,29 +677,63 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
                 <span>Datos del Cliente y Entrega</span>
               </h3>
 
-              <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-200 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setClientType('particular')}
-                  className={`px-3 py-1 rounded-md font-semibold transition-all ${
-                    clientType === 'particular'
-                      ? 'bg-brand-red text-white shadow-2xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Particular
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setClientType('empresa')}
-                  className={`px-3 py-1 rounded-md font-semibold transition-all ${
-                    clientType === 'empresa'
-                      ? 'bg-brand-red text-white shadow-2xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Empresa
-                </button>
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Selector de Entrega: A Domicilio vs Pasa a Recoger */}
+                <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-200 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setDeliveryType('domicilio')}
+                    className={`px-3 py-1 rounded-md font-bold transition-all flex items-center gap-1.5 ${
+                      deliveryType === 'domicilio'
+                        ? 'bg-brand-red text-white shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <Truck className="w-3.5 h-3.5" />
+                    <span>A Domicilio</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeliveryType('recoger');
+                      setIsVerified(true);
+                    }}
+                    className={`px-3 py-1 rounded-md font-bold transition-all flex items-center gap-1.5 ${
+                      deliveryType === 'recoger'
+                        ? 'bg-brand-red text-white shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <Navigation className="w-3.5 h-3.5" />
+                    <span>Pasa a Recoger</span>
+                  </button>
+                </div>
+
+                {/* Tipo de cliente: Particular vs Empresa */}
+                <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-200 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setClientType('particular')}
+                    className={`px-3 py-1 rounded-md font-semibold transition-all ${
+                      clientType === 'particular'
+                        ? 'bg-slate-800 text-white shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Particular
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setClientType('empresa')}
+                    className={`px-3 py-1 rounded-md font-semibold transition-all ${
+                      clientType === 'empresa'
+                        ? 'bg-slate-800 text-white shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Empresa
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -750,159 +791,177 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
                 />
               )}
 
-              <Input
-                id="client-street"
-                name="street"
-                label="Calle"
-                type="text"
-                value={street}
-                onChange={(e) => {
-                  setStreet(e.target.value);
-                  setIsVerified(false);
-                }}
-                placeholder="Av. Juárez / Rómulo Garza"
-                icon={MapPin}
-                required
-              />
+              {deliveryType === 'domicilio' ? (
+                <>
+                  <Input
+                    id="client-street"
+                    name="street"
+                    label="Calle"
+                    type="text"
+                    value={street}
+                    onChange={(e) => {
+                      setStreet(e.target.value);
+                      setIsVerified(false);
+                    }}
+                    placeholder="Av. Juárez / Rómulo Garza"
+                    icon={MapPin}
+                    required
+                  />
 
-              <Input
-                id="client-number"
-                name="number"
-                label="Número"
-                type="text"
-                value={number}
-                onChange={(e) => {
-                  setNumber(e.target.value);
-                  setIsVerified(false);
-                }}
-                placeholder="400 interior 2"
-                required
-              />
+                  <Input
+                    id="client-number"
+                    name="number"
+                    label="Número"
+                    type="text"
+                    value={number}
+                    onChange={(e) => {
+                      setNumber(e.target.value);
+                      setIsVerified(false);
+                    }}
+                    placeholder="400 interior 2"
+                    required
+                  />
 
-              <Input
-                id="client-colonia"
-                name="colonia"
-                label="Colonia (Tarifa auto)"
-                type="text"
-                value={colonia}
-                onChange={(e) => {
-                  handleColoniaChange(e.target.value);
-                  setIsVerified(false);
-                }}
-                placeholder="Centro / La Fe / Las Puentes"
-                required
-              />
+                  <Input
+                    id="client-colonia"
+                    name="colonia"
+                    label="Colonia (Tarifa auto)"
+                    type="text"
+                    value={colonia}
+                    onChange={(e) => {
+                      handleColoniaChange(e.target.value);
+                      setIsVerified(false);
+                    }}
+                    placeholder="Centro / La Fe / Las Puentes"
+                    required
+                  />
 
-              <div>
-                <label
-                  htmlFor="client-municipio"
-                  className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5"
-                >
-                  Municipio
-                </label>
-                <select
-                  id="client-municipio"
-                  value={municipio}
-                  onChange={(e) => {
-                    setMunicipio(e.target.value);
-                    setIsVerified(false);
-                  }}
-                  className="w-full text-xs font-medium bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-brand-red/20 focus:border-brand-red cursor-pointer"
-                >
-                  <option value="San Nicolás de los Garza">San Nicolás de los Garza</option>
-                  <option value="Monterrey">Monterrey</option>
-                  <option value="Guadalupe">Guadalupe</option>
-                  <option value="Apodaca">Apodaca</option>
-                  <option value="General Escobedo">General Escobedo</option>
-                  <option value="Santa Catarina">Santa Catarina</option>
-                  <option value="San Pedro Garza García">San Pedro Garza García</option>
-                  <option value="Juárez">Juárez</option>
-                  <option value="García">García</option>
-                  <option value="Santiago">Santiago</option>
-                  <option value="Cadereyta Jiménez">Cadereyta Jiménez</option>
-                </select>
-              </div>
+                  <div>
+                    <label
+                      htmlFor="client-municipio"
+                      className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5"
+                    >
+                      Municipio
+                    </label>
+                    <select
+                      id="client-municipio"
+                      value={municipio}
+                      onChange={(e) => {
+                        setMunicipio(e.target.value);
+                        setIsVerified(false);
+                      }}
+                      className="w-full text-xs font-medium bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-brand-red/20 focus:border-brand-red cursor-pointer"
+                    >
+                      <option value="San Nicolás de los Garza">San Nicolás de los Garza</option>
+                      <option value="Monterrey">Monterrey</option>
+                      <option value="Guadalupe">Guadalupe</option>
+                      <option value="Apodaca">Apodaca</option>
+                      <option value="General Escobedo">General Escobedo</option>
+                      <option value="Santa Catarina">Santa Catarina</option>
+                      <option value="San Pedro Garza García">San Pedro Garza García</option>
+                      <option value="Juárez">Juárez</option>
+                      <option value="García">García</option>
+                      <option value="Santiago">Santiago</option>
+                      <option value="Cadereyta Jiménez">Cadereyta Jiménez</option>
+                    </select>
+                  </div>
 
-              <Input
-                id="client-cross-streets"
-                name="crossStreets"
-                label="Entre Calles"
-                type="text"
-                value={crossStreets}
-                onChange={(e) => setCrossStreets(e.target.value)}
-                placeholder="Entre Morelos e Hidalgo"
-              />
+                  <Input
+                    id="client-cross-streets"
+                    name="crossStreets"
+                    label="Entre Calles"
+                    type="text"
+                    value={crossStreets}
+                    onChange={(e) => setCrossStreets(e.target.value)}
+                    placeholder="Entre Morelos e Hidalgo"
+                  />
 
-              <Input
-                id="client-delivery-references"
-                name="deliveryReferences"
-                label="Referencias de Entrega"
-                type="text"
-                value={deliveryReferences}
-                onChange={(e) => setDeliveryReferences(e.target.value)}
-                placeholder="Casa blanca, portón negro, al lado del Oxxo"
-              />
+                  <Input
+                    id="client-delivery-references"
+                    name="deliveryReferences"
+                    label="Referencias de Entrega"
+                    type="text"
+                    value={deliveryReferences}
+                    onChange={(e) => setDeliveryReferences(e.target.value)}
+                    placeholder="Casa blanca, portón negro, al lado del Oxxo"
+                  />
 
-              {/* Verificación de Dirección con Mapa Interactivo (estilo INE Scanner) */}
-              <div className="sm:col-span-2 md:col-span-3 rounded-xl overflow-hidden border border-slate-300 shadow-sm bg-white">
-                <div className="bg-slate-50 border-b border-slate-200 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                      <span>📍 Ubicación y Coordenadas GPS</span>
-                      {isVerified ? (
-                        <span className="text-[10px] bg-emerald-100 text-emerald-800 font-extrabold px-1.5 py-0.5 rounded border border-emerald-300">
-                          Confirmada
+                  {/* Verificación de Dirección con Mapa Interactivo (estilo INE Scanner) */}
+                  <div className="sm:col-span-2 md:col-span-3 rounded-xl overflow-hidden border border-slate-300 shadow-sm bg-white">
+                    <div className="bg-slate-50 border-b border-slate-200 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                          <span>📍 Ubicación y Coordenadas GPS</span>
+                          {isVerified ? (
+                            <span className="text-[10px] bg-emerald-100 text-emerald-800 font-extrabold px-1.5 py-0.5 rounded border border-emerald-300">
+                              Confirmada
+                            </span>
+                          ) : (
+                            <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded border border-amber-300">
+                              Sin verificar
+                            </span>
+                          )}
                         </span>
-                      ) : (
-                        <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded border border-amber-300">
-                          Sin verificar
-                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          icon={Navigation}
+                          isLoading={isGeocoding}
+                          onClick={handleVerifyAddress}
+                          className="bg-white border-slate-300 text-slate-800 hover:bg-slate-100 text-xs font-bold"
+                        >
+                          {isVerified ? 'Re-geocodificar' : 'Geocodificar Dirección'}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Contenedor del Mapa Leaflet Interactivo */}
+                    <div className="relative w-full h-52 bg-slate-100">
+                      <div ref={mapContainerRef} className="w-full h-full z-0" />
+                      {coordinates && (
+                        <a
+                          href={`https://www.google.com/maps?q=${coordinates.lat},${coordinates.lng}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="absolute top-2 right-2 z-10 bg-white/90 backdrop-blur-xs text-[11px] font-bold text-slate-700 px-2.5 py-1 rounded-lg shadow-sm hover:bg-white transition-colors flex items-center gap-1 border border-slate-200"
+                        >
+                          <Navigation className="w-3 h-3 text-brand-red" />
+                          Google Maps
+                        </a>
                       )}
+                    </div>
+
+                    {/* Pie del Mapa con Coordenadas e Indicador de arrastre */}
+                    <div className="bg-slate-50 border-t border-slate-200 px-3.5 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <span className="text-[11px] text-slate-600 font-medium">
+                        💡 Haz clic en el mapa o arrastra el pin rojo para ajustar el punto exacto.
+                      </span>
+                      <div className="flex items-center gap-3 font-mono font-bold text-slate-700 text-[11px]">
+                        <span>Lat: {coordinates?.lat ? Number(coordinates.lat).toFixed(6) : '---'}</span>
+                        <span>Lng: {coordinates?.lng ? Number(coordinates.lng).toFixed(6) : '---'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="sm:col-span-2 md:col-span-3 bg-emerald-50/70 border border-emerald-300 rounded-xl p-4 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+                    <Navigation className="w-5 h-5 text-emerald-700" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-extrabold text-emerald-950 block">
+                      🛍️ Pedido para Recoger en Sucursal (Pickup)
+                    </span>
+                    <span className="text-[11px] text-emerald-800 block mt-0.5">
+                      No se requiere dirección ni geolocalización. El costo de envío se establece automáticamente en <strong>$0</strong>.
                     </span>
                   </div>
-
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      icon={Navigation}
-                      isLoading={isGeocoding}
-                      onClick={handleVerifyAddress}
-                      className="bg-white border-slate-300 text-slate-800 hover:bg-slate-100 text-xs font-bold"
-                    >
-                      {isVerified ? 'Re-geocodificar' : 'Geocodificar Dirección'}
-                    </Button>
-                  </div>
                 </div>
-
-                {/* Contenedor del Mapa Leaflet Interactivo */}
-                <div className="relative w-full h-52 bg-slate-100">
-                  <div ref={mapContainerRef} className="w-full h-full z-0" />
-                  {coordinates && (
-                    <a
-                      href={`https://www.google.com/maps?q=${coordinates.lat},${coordinates.lng}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="absolute top-2 right-2 z-10 bg-white/90 backdrop-blur-xs text-[11px] font-bold text-slate-700 px-2.5 py-1 rounded-lg shadow-sm hover:bg-white transition-colors flex items-center gap-1 border border-slate-200"
-                    >
-                      <Navigation className="w-3 h-3 text-brand-red" />
-                      Google Maps
-                    </a>
-                  )}
-                </div>
-
-                {/* Pie del Mapa con Coordenadas e Indicador de arrastre */}
-                <div className="bg-slate-50 border-t border-slate-200 px-3.5 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
-                  <span className="text-[11px] text-slate-600 font-medium">
-                    💡 Haz clic en el mapa o arrastra el pin rojo para ajustar el punto exacto.
-                  </span>
-                  <div className="flex items-center gap-3 font-mono font-bold text-slate-700 text-[11px]">
-                    <span>Lat: {coordinates?.lat ? Number(coordinates.lat).toFixed(6) : '---'}</span>
-                    <span>Lng: {coordinates?.lng ? Number(coordinates.lng).toFixed(6) : '---'}</span>
-                  </div>
-                </div>
-              </div>
+              )}
             </div>
           </section>
 

@@ -203,12 +203,19 @@ const OrderDetailModal = ({
               </div>
 
               <div className="text-xs text-slate-600 space-y-1.5 pt-1.5 border-t border-slate-100">
-                <div className="flex items-start gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
-                  <span>
-                    <strong>Dirección:</strong> Calle {client?.street || 'N/A'} #{client?.number || 'S/N'}, Col. {client?.colonia || 'N/A'}, {client?.municipio || 'San Nicolás de los Garza'}
-                  </span>
-                </div>
+                {client?.deliveryType === 'recoger' ? (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 flex items-center gap-2 text-amber-900 font-semibold">
+                    <Navigation className="w-4 h-4 text-amber-700 shrink-0" />
+                    <span>🛍️ Pedido para Recoger en Sucursal (Sin envío)</span>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Dirección:</strong> Calle {client?.street || 'N/A'} #{client?.number || 'S/N'}, Col. {client?.colonia || 'N/A'}, {client?.municipio || 'San Nicolás de los Garza'}
+                    </span>
+                  </div>
+                )}
 
                 {client?.crossStreets && (
                   <div className="text-xs text-slate-600 pl-5">

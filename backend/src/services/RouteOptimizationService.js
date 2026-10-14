@@ -149,9 +149,13 @@ export const optimizeDeliveryRoute = (orders = []) => {
     // URL individual de navegación directa a esta parada (Google Maps)
     const singleNavUrl = `https://www.google.com/maps/dir/?api=1&destination=${nextStop.lat},${nextStop.lng}`;
 
+    const stopIndex = stops.length;
+    const routeStatus = stopIndex === 0 ? 'En curso' : stopIndex === 1 ? 'Siguiente' : null;
+
     stops.push({
-      stopNumber: stops.length + 1,
+      stopNumber: stopIndex + 1,
       ...nextStop,
+      routeStatus,
       distanceFromPrevKm: bestDistance,
       cumulativeDistanceKm: Math.round(cumulativeDistanceKm * 10) / 10,
       estimatedLegDurationMins: legDurationMins,

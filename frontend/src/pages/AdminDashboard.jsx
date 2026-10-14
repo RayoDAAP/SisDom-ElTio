@@ -185,6 +185,17 @@ const AdminDashboard = () => {
   }, [orders, searchQuery]);
 
   // Métricas calculadas para la barra de resumen en la vista de pedidos
+  const activeDriverQueues = useMemo(() => {
+    const queues = {};
+    filteredOrders
+      .filter((o) => o.assignedTo && (o.status === 'en_camino' || o.status === 'asignado' || o.status === 'incompleto'))
+      .forEach((o) => {
+        if (!queues[o.assignedTo]) queues[o.assignedTo] = [];
+        queues[o.assignedTo].push(o.id);
+      });
+    return queues;
+  }, [filteredOrders]);
+
   const metrics = useMemo(() => {
     const totalOrders = filteredOrders.length;
     const totalRevenue = filteredOrders.reduce((sum, o) => sum + (o.pricing?.total || 0), 0);
@@ -558,7 +569,23 @@ const AdminDashboard = () => {
                                   }`}
                                 >
                                   <td className="p-3 font-bold text-slate-900">
-                                    <span>{order.id}</span>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span>{order.id}</span>
+                                      {order.assignedTo && activeDriverQueues[order.assignedTo] && (
+                                        <>
+                                          {activeDriverQueues[order.assignedTo].indexOf(order.id) === 0 && (
+                                            <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                              📍 En curso
+                                            </span>
+                                          )}
+                                          {activeDriverQueues[order.assignedTo].indexOf(order.id) === 1 && (
+                                            <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300">
+                                              ⏳ Siguiente
+                                            </span>
+                                          )}
+                                        </>
+                                      )}
+                                    </div>
                                     {order.status === 'incompleto' && (
                                       <span className="block text-[10px] font-extrabold text-rose-600 uppercase">
                                         Faltante
@@ -580,8 +607,19 @@ const AdminDashboard = () => {
                                     </div>
                                   </td>
                                   <td className="p-3">
-                                    <div className="font-semibold text-slate-900">
-                                      {order.client?.name}
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-semibold text-slate-900">
+                                        {order.client?.name}
+                                      </span>
+                                      {order.client?.deliveryType === 'recoger' ? (
+                                        <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300">
+                                          🛍️ Recoger
+                                        </span>
+                                      ) : (
+                                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                                          🛵 Domicilio
+                                        </span>
+                                      )}
                                     </div>
                                     {order.client?.companyName && (
                                       <div className="text-[11px] text-slate-500 flex items-center gap-1">

@@ -285,10 +285,16 @@ export const RouteScreen = () => {
                               <Text style={styles.urgentPillText}>FALTANTE URGENTE</Text>
                             </View>
                           )}
-                          {stop.status === ORDER_STATUS.ON_THE_WAY && (
-                            <View style={styles.onTheWayPill}>
-                              <Truck size={11} color="#6B21A8" />
-                              <Text style={styles.onTheWayPillText}>EN RUTA</Text>
+                          {stop.routeStatus === 'En curso' && (
+                            <View style={[styles.onTheWayPill, { backgroundColor: '#DCFCE7', borderColor: '#86EFAC' }]}>
+                              <Truck size={11} color="#166534" />
+                              <Text style={[styles.onTheWayPillText, { color: '#166534' }]}>EN CURSO (ACTUAL)</Text>
+                            </View>
+                          )}
+                          {stop.routeStatus === 'Siguiente' && (
+                            <View style={[styles.onTheWayPill, { backgroundColor: '#FEF3C7', borderColor: '#FCD34D' }]}>
+                              <ArrowRight size={11} color="#92400E" />
+                              <Text style={[styles.onTheWayPillText, { color: '#92400E' }]}>SIGUIENTE</Text>
                             </View>
                           )}
                         </View>

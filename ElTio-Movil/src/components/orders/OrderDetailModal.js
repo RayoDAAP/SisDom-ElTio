@@ -114,13 +114,23 @@ export const OrderDetailModal = ({
                 <Text style={styles.actionBtnText}>{client?.phone || 'Llamar'}</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity onPress={handleOpenMap} style={styles.mapActionButton}>
-                <MapPin size={14} color={THEME.colors.slate700} />
-                <Text style={styles.mapBtnText}>Abrir Mapa</Text>
-              </TouchableOpacity>
+              {client?.deliveryType !== 'recoger' && (
+                <TouchableOpacity onPress={handleOpenMap} style={styles.mapActionButton}>
+                  <MapPin size={14} color={THEME.colors.slate700} />
+                  <Text style={styles.mapBtnText}>Abrir Mapa</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
-            <Text style={styles.fullAddressText}>{fullAddress}</Text>
+            {client?.deliveryType === 'recoger' ? (
+              <View style={{ backgroundColor: '#FEF3C7', padding: 8, borderRadius: 6, marginTop: 4 }}>
+                <Text style={{ color: '#92400E', fontWeight: 'bold', fontSize: 12 }}>
+                  🛍️ Pedido para Recoger en Sucursal (Sin envío)
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.fullAddressText}>{fullAddress}</Text>
+            )}
           </View>
 
           {/* Instrucciones de Entrega */}
