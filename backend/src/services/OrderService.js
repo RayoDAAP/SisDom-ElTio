@@ -8,6 +8,8 @@ import { supabase } from '../config/supabase.js';
 import { ORDER_STATUS, mapOrderFromDB, generateNextOrderId } from '../models/Order.js';
 import { registerClientAndColonia } from './ClientService.js';
 import { findUserById, USER_ROLES } from '../models/User.js';
+import { geocodeAddress } from './GeocodingService.js';
+import { optimizeDeliveryRoute } from './RouteOptimizationService.js';
 
 /**
  * Obtiene los pedidos con opción de filtrado por período y rol del usuario solicitante.
@@ -103,12 +105,31 @@ export const createOrder = async (orderData, createdByName) => {
   const newId = await generateNextOrderId();
   const createdAt = new Date().toISOString();
 
+  const clientData = { ...(orderData.client || {}) };
+  // Si no cuenta con coordenadas verificadas, geocodificar automáticamente
+  if (!clientData.lat || !clientData.lng) {
+    try {
+      const geo = await geocodeAddress({
+        street: clientData.street,
+        number: clientData.number,
+        colonia: clientData.colonia,
+        municipio: clientData.municipio,
+        crossStreets: clientData.crossStreets,
+      });
+      clientData.lat = geo.lat;
+      clientData.lng = geo.lng;
+    } catch {
+      clientData.lat = 25.73464270666944;
+      clientData.lng = -100.24216940421442;
+    }
+  }
+
   const payload = {
     id: newId,
     created_at: createdAt,
     status: ORDER_STATUS.READY, // Estatus inicial: 'listo'
     created_by: createdByName || 'Auxiliar de Pedidos',
-    client: orderData.client || {},
+    client: clientData,
     items: orderData.items || {},
     pricing: orderData.pricing || {},
     payment: orderData.payment || {},
@@ -130,9 +151,7 @@ export const createOrder = async (orderData, createdByName) => {
   }
 
   // Guardado de cliente y colonia de forma automática
-  if (orderData.client) {
-    await registerClientAndColonia(orderData.client, orderData.pricing?.shippingFee);
-  }
+  await registerClientAndColonia(clientData, orderData.pricing?.shippingFee);
 
   return mapOrderFromDB(data);
 };
@@ -315,4 +334,55 @@ export const updatePaymentStatus = async (id, transferStatus) => {
 
   if (error) throw new Error(error.message);
   return mapOrderFromDB(data);
+};
+
+/**
+ * Obtiene la ruta de entrega óptima para un repartidor.
+ * Consulta los pedidos activos asignados ('asignado', 'en_camino', 'incompleto')
+ * y aplica el algoritmo de optimización multicriterio partiendo de la sucursal.
+ *
+ * @param {number|string} driverId - ID del repartidor
+ * @returns {Promise<object>} Ruta optimizada con paradas, métricas y URLs de mapas
+ */
+export const getDriverRoute = async (driverId) => {
+  if (!driverId) {
+    throw new Error('ID de repartidor requerido para calcular la ruta');
+  }
+
+  const { data, error } = await supabase
+    .from('orders')
+    .select('*')
+    .eq('assigned_to', Number(driverId))
+    .in('status', [ORDER_STATUS.ASSIGNED, ORDER_STATUS.ON_THE_WAY, ORDER_STATUS.MISSING_ITEMS]);
+
+  if (error || !data) {
+    console.error('[OrderService] Error al obtener pedidos para ruta:', error?.message);
+    return optimizeDeliveryRoute([]);
+  }
+
+  const activeOrders = data.map(mapOrderFromDB);
+
+  // Asegurar que cada pedido cuente con coordenadas para el ruteo
+  for (const o of activeOrders) {
+    if (!o.client?.lat || !o.client?.lng) {
+      try {
+        const geo = await geocodeAddress({
+          street: o.client?.street,
+          number: o.client?.number,
+          colonia: o.client?.colonia,
+          municipio: o.client?.municipio,
+          crossStreets: o.client?.crossStreets,
+        });
+        if (!o.client) o.client = {};
+        o.client.lat = geo.lat;
+        o.client.lng = geo.lng;
+      } catch {
+        if (!o.client) o.client = {};
+        o.client.lat = 25.73464270666944;
+        o.client.lng = -100.24216940421442;
+      }
+    }
+  }
+
+  return optimizeDeliveryRoute(activeOrders);
 };

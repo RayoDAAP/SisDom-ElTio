@@ -114,3 +114,20 @@ export const updatePaymentStatus = async (req, res) => {
     return sendError(res, 400, error.message);
   }
 };
+
+/**
+ * GET /api/orders/driver/route
+ * Obtiene la ruta de entregas optimizada para el repartidor autenticado.
+ */
+export const getDriverRoute = async (req, res) => {
+  try {
+    const driverId = req.query.driverId || req.user?.id;
+    if (!driverId) {
+      return sendError(res, 400, 'Se requiere identificar al repartidor');
+    }
+    const route = await OrderService.getDriverRoute(driverId);
+    return sendSuccess(res, 200, 'Ruta optimizada calculada con éxito', { route });
+  } catch (error) {
+    return sendError(res, 500, error.message);
+  }
+};

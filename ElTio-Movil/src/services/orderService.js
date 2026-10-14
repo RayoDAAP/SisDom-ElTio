@@ -1,7 +1,8 @@
 /**
  * @module orderService
  * @description Servicio de pedidos para el módulo de repartidores.
- *              Permite listar entregas pendientes/activas y actualizar estados de ruta.
+ *              Permite listar entregas, actualizar estados de ruta, reportar faltantes
+ *              y obtener la ruta de entrega optimizada por GPS.
  */
 import { API_BASE_URL } from '../config/api';
 
@@ -32,8 +33,32 @@ export const orderService = {
   },
 
   /**
+   * Obtiene la ruta optimizada calculada por el backend para el repartidor.
+   * @param {string} token - JWT de autenticación
+   */
+  async getDriverRoute(token) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/orders/driver/route`, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Error al obtener ruta optimizada');
+      }
+
+      return data.data.route;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  /**
    * Actualiza el estado operativo de una entrega.
-   * Por ejemplo: de 'listo' a 'en_camino', o de 'en_camino' a 'entregado'.
+   * Por ejemplo: de 'listo'/'asignado' a 'en_camino', o de 'en_camino' a 'entregado'.
    * @param {string} token
    * @param {string} orderId
    * @param {string} newStatus

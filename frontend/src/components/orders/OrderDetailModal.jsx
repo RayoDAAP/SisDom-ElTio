@@ -200,11 +200,42 @@ const OrderDetailModal = ({
                 <span><strong>Teléfono:</strong> {client?.phone}</span>
               </div>
 
-              <div className="text-xs text-slate-600 flex items-start gap-1.5 pt-1 border-t border-slate-100">
-                <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
-                <span>
-                  <strong>Dirección:</strong> Calle {client?.street || 'N/A'} #{client?.number || 'S/N'}, Col. {client?.colonia || 'N/A'}
-                </span>
+              <div className="text-xs text-slate-600 space-y-1.5 pt-1.5 border-t border-slate-100">
+                <div className="flex items-start gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Dirección:</strong> Calle {client?.street || 'N/A'} #{client?.number || 'S/N'}, Col. {client?.colonia || 'N/A'}, {client?.municipio || 'San Nicolás de los Garza'}
+                  </span>
+                </div>
+
+                {client?.crossStreets && (
+                  <div className="text-xs text-slate-600 pl-5">
+                    <strong>Entre Calles:</strong> {client.crossStreets}
+                  </div>
+                )}
+
+                {client?.deliveryReferences && (
+                  <div className="text-xs text-amber-900 bg-amber-50/80 p-2 rounded-lg border border-amber-200">
+                    <strong>Referencias de Entrega:</strong> {client.deliveryReferences}
+                  </div>
+                )}
+
+                {client?.lat && client?.lng && (
+                  <div className="flex items-center justify-between pt-1 pl-5">
+                    <span className="text-[11px] font-bold text-emerald-700 flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <span>Coordenadas GPS: {client.lat.toFixed(5)}, {client.lng.toFixed(5)}</span>
+                    </span>
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${client.lat},${client.lng}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] font-bold text-brand-red hover:underline flex items-center gap-1"
+                    >
+                      Ver en Google Maps ↗
+                    </a>
+                  </div>
+                )}
               </div>
             </div>
           </div>

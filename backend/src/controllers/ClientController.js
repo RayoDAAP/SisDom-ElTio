@@ -1,6 +1,6 @@
 /**
  * @module ClientController
- * @description Controlador HTTP para endpoints de cliente y tarifas por colonia.
+ * @description Controlador HTTP para endpoints de cliente, tarifas por colonia y geocodificación.
  */
 import * as ClientService from '../services/ClientService.js';
 import { sendSuccess, sendError } from '../utils/responseHelper.js';
@@ -32,6 +32,26 @@ export const getColoniaShipping = async (req, res) => {
     }
     const data = await ClientService.fetchShippingFee(colonia);
     return sendSuccess(res, 200, 'Tarifa de colonia obtenida', data);
+  } catch (error) {
+    return sendError(res, 500, error.message);
+  }
+};
+
+/**
+ * GET /api/clients/geocode?street=...&number=...&colonia=...&municipio=...&crossStreets=...
+ * Obtiene las coordenadas geográficas de una dirección en el área metropolitana de Monterrey.
+ */
+export const geocodeAddress = async (req, res) => {
+  try {
+    const { street, number, colonia, municipio, crossStreets } = req.query;
+    const coords = await ClientService.geocodeClientAddress({
+      street,
+      number,
+      colonia,
+      municipio: municipio || 'San Nicolás de los Garza',
+      crossStreets,
+    });
+    return sendSuccess(res, 200, 'Coordenadas geocodificadas con éxito', coords);
   } catch (error) {
     return sendError(res, 500, error.message);
   }

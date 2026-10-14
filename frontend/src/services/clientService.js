@@ -1,6 +1,6 @@
 /**
  * @module clientService
- * @description Servicio HTTP para búsqueda de clientes por teléfono y tarifas por colonia.
+ * @description Servicio HTTP para búsqueda de clientes por teléfono, geocodificación y tarifas por colonia.
  */
 import axios from 'axios';
 
@@ -41,4 +41,15 @@ export const fetchShippingFeeByColoniaRequest = async (colonia) => {
   if (!colonia) return null;
   const response = await api.get('/colonias/shipping', { params: { colonia } });
   return response.data.data.fee;
+};
+
+/**
+ * Geocodifica una dirección en el backend.
+ * @param {object} addressData
+ */
+export const geocodeAddressRequest = async ({ street, number, colonia, municipio, crossStreets }) => {
+  const response = await api.get('/clients/geocode', {
+    params: { street, number, colonia, municipio, crossStreets },
+  });
+  return response.data.data;
 };

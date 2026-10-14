@@ -11,6 +11,7 @@ import {
   assignOrder,
   reportMissingItems,
   updatePaymentStatus,
+  getDriverRoute,
 } from '../controllers/OrderController.js';
 import { authenticate, authorize } from '../middleware/authMiddleware.js';
 import { USER_ROLES } from '../models/User.js';
@@ -19,6 +20,9 @@ const router = Router();
 
 // Todas las rutas requieren autenticación de trabajador/admin/repartidor
 router.use(authenticate);
+
+// Ruta de entrega optimizada para repartidor (debe ir antes de /:id)
+router.get('/driver/route', getDriverRoute);
 
 router.get('/', getOrders);
 router.get('/:id', getOrderById);

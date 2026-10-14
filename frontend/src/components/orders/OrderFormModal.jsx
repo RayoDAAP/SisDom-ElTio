@@ -34,6 +34,9 @@ import {
   Banknote,
   ArrowRightLeft,
   Coffee,
+  Navigation,
+  Compass,
+  ShieldCheck,
 } from 'lucide-react';
 import {
   PRICES,
@@ -45,6 +48,7 @@ import {
 import {
   searchClientByPhoneRequest,
   fetchShippingFeeByColoniaRequest,
+  geocodeAddressRequest,
 } from '../../services/clientService';
 import Button from '../common/Button';
 import Input from '../common/Input';
@@ -59,7 +63,7 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  // ─── Estado del Cliente ─────────────────────────────────────────────────────
+  // ─── Estado del Cliente y Geolocalización ──────────────────────────────────
   const [clientType, setClientType] = useState('particular');
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
@@ -67,6 +71,13 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
   const [street, setStreet] = useState('');
   const [number, setNumber] = useState('');
   const [colonia, setColonia] = useState('');
+  const [municipio, setMunicipio] = useState('San Nicolás de los Garza');
+  const [crossStreets, setCrossStreets] = useState('');
+  const [deliveryReferences, setDeliveryReferences] = useState('');
+  const [coordinates, setCoordinates] = useState(null); // { lat, lng }
+  const [isVerified, setIsVerified] = useState(false);
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [geocodeResult, setGeocodeResult] = useState(null);
 
   const [isSearchingClient, setIsSearchingClient] = useState(false);
   const [clientFound, setClientFound] = useState(false);
@@ -126,6 +137,16 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
           setStreet(found.street || '');
           setNumber(found.number || '');
           setColonia(found.colonia || '');
+          setMunicipio(found.municipio || 'San Nicolás de los Garza');
+          setCrossStreets(found.crossStreets || '');
+          setDeliveryReferences(found.deliveryReferences || '');
+          if (found.lat && found.lng) {
+            setCoordinates({ lat: found.lat, lng: found.lng });
+          } else {
+            setCoordinates(null);
+          }
+          setIsVerified(Boolean(found.isVerified));
+          setGeocodeResult(null);
           setClientFound(true);
 
           if (found.colonia) {
@@ -136,6 +157,8 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
           }
         } else {
           setClientFound(false);
+          setIsVerified(false);
+          setCoordinates(null);
         }
       } catch (err) {
         console.error('Error al buscar cliente por teléfono:', err);
@@ -146,6 +169,35 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
       setClientFound(false);
     }
   }, []);
+
+  // ─── Verificación Manual de Dirección / Coordenadas ─────────────────────────
+  const handleVerifyAddress = async () => {
+    if (!street.trim()) {
+      setErrorMsg('Ingresa al menos la calle para verificar la dirección');
+      return;
+    }
+    setIsGeocoding(true);
+    setErrorMsg('');
+    try {
+      const res = await geocodeAddressRequest({
+        street,
+        number,
+        colonia,
+        municipio,
+        crossStreets,
+      });
+      if (res && res.lat && res.lng) {
+        setCoordinates({ lat: res.lat, lng: res.lng });
+        setGeocodeResult(res);
+        setIsVerified(true);
+      }
+    } catch (err) {
+      console.error('Error al geocodificar dirección:', err);
+      setErrorMsg('No se pudo verificar la dirección automáticamente. Puedes continuar de todos modos.');
+    } finally {
+      setIsGeocoding(false);
+    }
+  };
 
   // ─── Búsqueda de Envío por Colonia ─────────────────────────────────────────
   const handleColoniaChange = useCallback(async (newColonia) => {
@@ -469,6 +521,12 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
           street,
           number,
           colonia,
+          municipio,
+          crossStreets,
+          deliveryReferences,
+          lat: coordinates?.lat || null,
+          lng: coordinates?.lng || null,
+          isVerified,
         },
         items,
         payment,
@@ -623,9 +681,13 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
                 label="Calle"
                 type="text"
                 value={street}
-                onChange={(e) => setStreet(e.target.value)}
-                placeholder="Av. Universidad"
+                onChange={(e) => {
+                  setStreet(e.target.value);
+                  setIsVerified(false);
+                }}
+                placeholder="Av. Juárez / Rómulo Garza"
                 icon={MapPin}
+                required
               />
 
               <Input
@@ -634,8 +696,12 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
                 label="Número"
                 type="text"
                 value={number}
-                onChange={(e) => setNumber(e.target.value)}
-                placeholder="1402 int 3"
+                onChange={(e) => {
+                  setNumber(e.target.value);
+                  setIsVerified(false);
+                }}
+                placeholder="400 interior 2"
+                required
               />
 
               <Input
@@ -644,9 +710,111 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
                 label="Colonia (Tarifa auto)"
                 type="text"
                 value={colonia}
-                onChange={(e) => handleColoniaChange(e.target.value)}
-                placeholder="Centro"
+                onChange={(e) => {
+                  handleColoniaChange(e.target.value);
+                  setIsVerified(false);
+                }}
+                placeholder="Centro / La Fe / Las Puentes"
+                required
               />
+
+              <div>
+                <label
+                  htmlFor="client-municipio"
+                  className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5"
+                >
+                  Municipio
+                </label>
+                <select
+                  id="client-municipio"
+                  value={municipio}
+                  onChange={(e) => {
+                    setMunicipio(e.target.value);
+                    setIsVerified(false);
+                  }}
+                  className="w-full text-xs font-medium bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-brand-red/20 focus:border-brand-red cursor-pointer"
+                >
+                  <option value="San Nicolás de los Garza">San Nicolás de los Garza</option>
+                  <option value="Monterrey">Monterrey</option>
+                  <option value="Guadalupe">Guadalupe</option>
+                  <option value="Apodaca">Apodaca</option>
+                  <option value="General Escobedo">General Escobedo</option>
+                  <option value="Santa Catarina">Santa Catarina</option>
+                  <option value="San Pedro Garza García">San Pedro Garza García</option>
+                  <option value="Juárez">Juárez</option>
+                  <option value="García">García</option>
+                  <option value="Santiago">Santiago</option>
+                  <option value="Cadereyta Jiménez">Cadereyta Jiménez</option>
+                </select>
+              </div>
+
+              <Input
+                id="client-cross-streets"
+                name="crossStreets"
+                label="Entre Calles"
+                type="text"
+                value={crossStreets}
+                onChange={(e) => setCrossStreets(e.target.value)}
+                placeholder="Entre Morelos e Hidalgo"
+              />
+
+              <Input
+                id="client-delivery-references"
+                name="deliveryReferences"
+                label="Referencias de Entrega"
+                type="text"
+                value={deliveryReferences}
+                onChange={(e) => setDeliveryReferences(e.target.value)}
+                placeholder="Casa blanca, portón negro, al lado del Oxxo"
+              />
+
+              {/* Caja de Verificación de Coordenadas */}
+              {isVerified && coordinates ? (
+                <div className="sm:col-span-2 md:col-span-3 bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2 transition-all">
+                  <div className="flex items-center gap-2.5">
+                    <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+                    <div>
+                      <span className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                        <span>📍 Dirección Verificada</span>
+                        <span className="text-[10px] bg-emerald-200 text-emerald-800 px-1.5 py-0.5 rounded font-black">
+                          Lista para GPS
+                        </span>
+                      </span>
+                      <span className="text-[11px] text-emerald-700 block mt-0.5">
+                        Coordenadas: {coordinates.lat.toFixed(5)}, {coordinates.lng.toFixed(5)} — Se guardarán en el historial del cliente
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleVerifyAddress}
+                    disabled={isGeocoding}
+                    className="text-xs text-emerald-800 hover:text-emerald-950 font-bold underline cursor-pointer"
+                  >
+                    {isGeocoding ? 'Actualizando...' : 'Re-verificar'}
+                  </button>
+                </div>
+              ) : (
+                <div className="sm:col-span-2 md:col-span-3 bg-slate-100/90 border border-slate-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-slate-600">
+                    <Compass className="w-4 h-4 text-slate-400 shrink-0" />
+                    <span className="text-xs font-medium">
+                      Verifica las coordenadas para que la app móvil del chofer trace la ruta óptima.
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    icon={Navigation}
+                    isLoading={isGeocoding}
+                    onClick={handleVerifyAddress}
+                    className="bg-white border-slate-300 text-slate-800 hover:bg-slate-50 text-xs font-semibold"
+                  >
+                    Verificar Dirección
+                  </Button>
+                </div>
+              )}
             </div>
           </section>
 
