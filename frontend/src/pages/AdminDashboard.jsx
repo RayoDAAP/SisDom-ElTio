@@ -14,7 +14,6 @@ import {
   CheckCircle2,
   Plus,
   LogOut,
-  Eye,
   Building2,
   User,
   Calendar,
@@ -30,6 +29,8 @@ import {
   Lock,
   CreditCard,
   Banknote,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import useAuth from '../hooks/useAuth';
 import Logo from '../components/common/Logo';
@@ -57,6 +58,7 @@ const AdminDashboard = () => {
   const [orders, setOrders] = useState([]);
   const [dateRange, setDateRange] = useState('day'); // 'day' | 'week' | 'month' | 'all'
   const [searchQuery, setSearchQuery] = useState('');
+  const [showFinalized, setShowFinalized] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Repartidores activos para el selector de asignación
@@ -510,13 +512,34 @@ const AdminDashboard = () => {
                   const BlockIcon = block.icon;
                   if (block.orders.length === 0) return null;
 
+                  const isFinalized = block.id === 'finalizados';
+                  const isExpanded = !isFinalized || showFinalized || Boolean(searchQuery.trim());
+
                   return (
                     <div
                       key={block.id}
                       className={`rounded-xl border shadow-2xs overflow-hidden ${block.borderClass}`}
                     >
                       {/* Cabecera del Bloque de Estatus */}
-                      <div className={`p-4 border-b flex flex-wrap items-center justify-between gap-2 ${block.headerBg}`}>
+                      <div
+                        className={`p-4 ${isExpanded ? 'border-b' : ''} flex flex-wrap items-center justify-between gap-2 ${block.headerBg} ${
+                          isFinalized ? 'cursor-pointer select-none hover:bg-slate-200/60 transition-colors' : ''
+                        }`}
+                        {...(isFinalized
+                          ? {
+                              role: 'button',
+                              tabIndex: 0,
+                              'aria-expanded': isExpanded,
+                              onClick: () => setShowFinalized((prev) => !prev),
+                              onKeyDown: (e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  setShowFinalized((prev) => !prev);
+                                }
+                              },
+                            }
+                          : {})}
+                      >
                         <div className="flex items-center gap-2.5">
                           <div className="p-1.5 rounded-lg bg-white/80 shadow-2xs text-slate-800">
                             <BlockIcon className="w-4 h-4 text-brand-red" />
@@ -535,241 +558,247 @@ const AdminDashboard = () => {
                             </p>
                           </div>
                         </div>
+
+                        {isFinalized && (
+                          <div className="text-slate-500 flex items-center gap-1 text-xs font-semibold pr-1">
+                            {isExpanded ? (
+                              <ChevronDown className="w-5 h-5 text-slate-600" />
+                            ) : (
+                              <ChevronRight className="w-5 h-5 text-slate-600" />
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       {/* Tabla del Bloque */}
-                      <div className="overflow-x-auto bg-white">
-                        <table className="w-full text-left text-xs border-collapse">
-                          <thead>
-                            <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px]">
-                              <th className="p-3">Folio</th>
-                              <th className="p-3">Fecha / Espera</th>
-                              <th className="p-3">Cliente</th>
-                              <th className="p-3">Teléfono</th>
-                              <th className="p-3">Pago</th>
-                              <th className="p-3">Total</th>
-                              <th className="p-3">Estado</th>
-                              <th className="p-3">Repartidor</th>
-                              <th className="p-3 text-right">Acciones</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100 text-slate-700">
-                            {block.orders.map((order) => {
-                              const statusConfig =
-                                ORDER_STATUS_CONFIG[order.status] || ORDER_STATUS_CONFIG.listo;
-                              const isAssigning = assigningOrderId === order.id;
-                              const isLocked =
-                                order.status === 'entregado' || order.status === 'cancelado';
+                      {isExpanded && (
+                        <div className="overflow-x-auto bg-white">
+                          <table className="w-full text-left text-xs border-collapse">
+                            <thead>
+                              <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px]">
+                                <th className="p-3">Pedido</th>
+                                <th className="p-3">Cliente</th>
+                                <th className="p-3">Pago</th>
+                                <th className="p-3">Total</th>
+                                <th className="p-3">Estado</th>
+                                <th className="p-3">Repartidor</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 text-slate-700">
+                              {block.orders.map((order) => {
+                                const statusConfig =
+                                  ORDER_STATUS_CONFIG[order.status] || ORDER_STATUS_CONFIG.listo;
+                                const isAssigning = assigningOrderId === order.id;
+                                const isLocked =
+                                  order.status === 'entregado' || order.status === 'cancelado';
 
-                              return (
-                                <tr
-                                  key={order.id}
-                                  className={`hover:bg-slate-50/80 transition-colors ${
-                                    order.status === 'incompleto' ? 'bg-rose-50/40' : ''
-                                  }`}
-                                >
-                                  <td className="p-3 font-bold text-slate-900">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      <span>{order.id}</span>
-                                      {order.assignedTo && activeDriverQueues[order.assignedTo] && (
-                                        <>
-                                          {activeDriverQueues[order.assignedTo].indexOf(order.id) === 0 && (
-                                            <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
-                                              En curso
-                                            </span>
-                                          )}
-                                          {activeDriverQueues[order.assignedTo].indexOf(order.id) === 1 && (
-                                            <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300">
-                                              Siguiente
-                                            </span>
-                                          )}
-                                        </>
-                                      )}
-                                    </div>
-                                    {order.status === 'incompleto' && (
-                                      <span className="block text-[10px] font-extrabold text-rose-600 uppercase">
-                                        Faltante
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td className="p-3 text-slate-500">
-                                    <div>
-                                      {new Date(order.createdAt).toLocaleTimeString('es-MX', {
-                                        hour: '2-digit',
-                                        minute: '2-digit',
-                                      })}
-                                    </div>
-                                    <div className="text-[10px] text-slate-400">
-                                      {new Date(order.createdAt).toLocaleDateString('es-MX', {
-                                        day: '2-digit',
-                                        month: 'short',
-                                      })}
-                                    </div>
-                                  </td>
-                                  <td className="p-3">
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="font-semibold text-slate-900">
-                                        {order.client?.name}
-                                      </span>
-                                      {order.client?.deliveryType === 'recoger' ? (
-                                        <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300">
-                                          Recoger
-                                        </span>
-                                      ) : (
-                                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200">
-                                          Domicilio
-                                        </span>
-                                      )}
-                                    </div>
-                                    {order.client?.companyName && (
-                                      <div className="text-[11px] text-slate-500 flex items-center gap-1">
-                                        <Building2 className="w-3 h-3 text-slate-400" />
-                                        <span>{order.client.companyName}</span>
-                                      </div>
-                                    )}
-                                    {/* Aviso de faltante si existe */}
-                                    {order.missingReport && (
-                                      <div className="mt-1 text-[11px] text-rose-800 bg-rose-100/80 px-2 py-0.5 rounded border border-rose-300 font-semibold flex items-center gap-1">
-                                        <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
-                                        <span>Falta: {order.missingReport.note}</span>
-                                      </div>
-                                    )}
-                                  </td>
-                                  <td className="p-3 font-medium text-slate-600">
-                                    {order.client?.phone || '—'}
-                                  </td>
-                                  <td className="p-3">
-                                    {order.payment?.method === 'transferencia' ? (
-                                      <div className="space-y-1">
-                                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-700">
-                                          <CreditCard className="w-3 h-3 text-slate-500" />
-                                          <span>Transf.</span>
-                                        </span>
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            handlePaymentStatusChange(
-                                              order.id,
-                                              order.payment?.transferStatus === 'aceptada'
-                                                ? 'pendiente'
-                                                : 'aceptada'
-                                            )
-                                          }
-                                          className={`block px-2 py-0.5 rounded text-[10px] font-extrabold border cursor-pointer transition-colors ${
-                                            order.payment?.transferStatus === 'aceptada'
-                                              ? 'bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200'
-                                              : 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200'
-                                          }`}
-                                          title="Clic para cambiar estado de transferencia"
-                                        >
-                                          {order.payment?.transferStatus === 'aceptada'
-                                            ? 'Aceptada'
-                                            : 'Pendiente'}
-                                        </button>
-                                      </div>
-                                    ) : (
-                                      <div className="text-[11px] text-slate-600 font-semibold flex items-center gap-1">
-                                        <Banknote className="w-3.5 h-3.5 text-emerald-700" />
-                                        <span>Efectivo</span>
-                                        {order.payment?.change !== null && order.payment?.change !== undefined && (
-                                          <span className="text-[10px] text-emerald-800">
-                                            (Cambio ${order.payment.change})
+                                return (
+                                  <tr
+                                    key={order.id}
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={() => setSelectedOrder(order)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        setSelectedOrder(order);
+                                      }
+                                    }}
+                                    className={`hover:bg-slate-50/80 transition-colors cursor-pointer ${
+                                      order.status === 'incompleto' ? 'bg-rose-50/40' : ''
+                                    }`}
+                                  >
+                                    {/* 1. Pedido */}
+                                    <td className="p-3">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="font-bold text-slate-900">{order.id}</span>
+                                        {order.assignedTo && activeDriverQueues[order.assignedTo] && (
+                                          <>
+                                            {activeDriverQueues[order.assignedTo].indexOf(order.id) === 0 && (
+                                              <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                                En curso
+                                              </span>
+                                            )}
+                                            {activeDriverQueues[order.assignedTo].indexOf(order.id) === 1 && (
+                                              <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300">
+                                                Siguiente
+                                              </span>
+                                            )}
+                                          </>
+                                        )}
+                                        {order.status === 'incompleto' && (
+                                          <span className="text-[10px] font-extrabold text-rose-600 uppercase">
+                                            Faltante
                                           </span>
                                         )}
                                       </div>
-                                    )}
-                                  </td>
-                                  <td className="p-3 font-extrabold text-slate-900">
-                                    ${order.pricing?.total}
-                                  </td>
-                                  <td className="p-3">
-                                    {isLocked ? (
-                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
-                                        <Lock className="w-3 h-3 text-slate-400" />
-                                        <span>{statusConfig.label}</span>
-                                      </span>
-                                    ) : (
-                                      <div className="relative inline-flex items-center">
-                                        <select
-                                          value={order.status}
-                                          disabled={updatingOrderId === order.id}
-                                          onChange={(e) =>
-                                            handleStatusChange(order.id, e.target.value)
-                                          }
-                                          className={`text-xs font-bold px-2.5 py-1 rounded-lg border cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-400 ${statusConfig.badgeClass} ${
-                                            updatingOrderId === order.id ? 'opacity-60 cursor-not-allowed' : ''
-                                          }`}
-                                        >
-                                          <option value="incompleto">Faltante (Urgente)</option>
-                                          <option value="listo">Listo</option>
-                                          <option value="asignado">Asignado</option>
-                                          <option value="en_camino">En Camino</option>
-                                          <option value="entregado">Entregado</option>
-                                          <option value="cancelado">Cancelado</option>
-                                        </select>
-                                        {updatingOrderId === order.id && (
-                                          <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-700 ml-1.5" />
-                                        )}
+                                      <div className="text-[11px] text-slate-400 mt-0.5">
+                                        <span>
+                                          {new Date(order.createdAt).toLocaleTimeString('es-MX', {
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                          })}
+                                        </span>
+                                        <span className="mx-1">·</span>
+                                        <span>
+                                          {new Date(order.createdAt).toLocaleDateString('es-MX', {
+                                            day: '2-digit',
+                                            month: 'short',
+                                          })}
+                                        </span>
                                       </div>
-                                    )}
-                                  </td>
-                                  <td className="p-3 min-w-[150px]">
-                                    {isLocked ? (
-                                      <span className="text-slate-600 font-medium text-xs flex items-center gap-1">
-                                        <Truck className="w-3.5 h-3.5 text-slate-400" />
-                                        <span>{order.assignedToName || 'Sin asignar'}</span>
-                                      </span>
-                                    ) : activeDrivers.length === 0 ? (
-                                      <span className="text-slate-400 text-[11px]">
-                                        Sin repartidores
-                                      </span>
-                                    ) : (
+                                    </td>
+
+                                    {/* 2. Cliente */}
+                                    <td className="p-3">
                                       <div className="flex items-center gap-1.5">
-                                        {order.assignedTo ? (
-                                          <UserCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                        <span className="font-semibold text-slate-900">
+                                          {order.client?.name}
+                                        </span>
+                                        {order.client?.deliveryType === 'recoger' ? (
+                                          <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300">
+                                            Recoger
+                                          </span>
                                         ) : (
-                                          <Truck className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                          <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                                            Domicilio
+                                          </span>
                                         )}
-                                        <select
-                                          value={order.assignedTo ?? ''}
-                                          onChange={(e) =>
-                                            handleAssignDriver(order.id, e.target.value)
-                                          }
-                                          disabled={isAssigning}
-                                          className={`text-xs px-2 py-1 rounded-lg border bg-white focus:outline-none focus:ring-2 focus:ring-brand-red/20 focus:border-brand-red cursor-pointer w-full ${
-                                            isAssigning ? 'opacity-50 cursor-not-allowed' : ''
-                                          } ${
-                                            order.assignedTo
-                                              ? 'border-emerald-300 text-emerald-700 font-semibold'
-                                              : 'border-slate-200 text-slate-500'
-                                          }`}
-                                        >
-                                          <option value="">Sin asignar</option>
-                                          {activeDrivers.map((d) => (
-                                            <option key={d.id} value={d.id}>
-                                              {d.name}
-                                            </option>
-                                          ))}
-                                        </select>
                                       </div>
-                                    )}
-                                  </td>
-                                  <td className="p-3 text-right">
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => setSelectedOrder(order)}
-                                    >
-                                      <Eye className="w-3.5 h-3.5 mr-1" />
-                                      <span>Detalles</span>
-                                    </Button>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
+                                      {order.client?.companyName && (
+                                        <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                                          <Building2 className="w-3 h-3 text-slate-400" />
+                                          <span>{order.client.companyName}</span>
+                                        </div>
+                                      )}
+                                      <div className="text-[11px] text-slate-500 font-medium mt-0.5">
+                                        {order.client?.phone || '—'}
+                                      </div>
+                                      {/* Aviso de faltante si existe */}
+                                      {order.missingReport && (
+                                        <div className="mt-1 text-[11px] text-rose-800 bg-rose-100/80 px-2 py-0.5 rounded border border-rose-300 font-semibold flex items-center gap-1">
+                                          <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
+                                          <span>Falta: {order.missingReport.note}</span>
+                                        </div>
+                                      )}
+                                    </td>
+
+                                    {/* 3. Pago */}
+                                    <td className="p-3" onClick={(e) => e.stopPropagation()}>
+                                      {order.payment?.method === 'transferencia' ? (
+                                        <div className="space-y-1">
+                                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-700">
+                                            <CreditCard className="w-3 h-3 text-slate-500" />
+                                            <span>Transferencia</span>
+                                          </span>
+                                          {order.payment?.transferStatus !== 'aceptada' && (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handlePaymentStatusChange(order.id, 'aceptada');
+                                              }}
+                                              className="block px-2 py-0.5 rounded text-[10px] font-extrabold border bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200 cursor-pointer transition-colors"
+                                              title="Clic para cambiar estado de transferencia"
+                                            >
+                                              Pendiente
+                                            </button>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <div className="text-[11px] text-slate-600 font-semibold flex items-center gap-1">
+                                          <Banknote className="w-3.5 h-3.5 text-emerald-700" />
+                                          <span>Efectivo</span>
+                                        </div>
+                                      )}
+                                    </td>
+
+                                    {/* 4. Total */}
+                                    <td className="p-3 font-extrabold text-slate-900">
+                                      ${order.pricing?.total}
+                                    </td>
+
+                                    {/* 5. Estado */}
+                                    <td className="p-3" onClick={(e) => e.stopPropagation()}>
+                                      {isLocked ? (
+                                        <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-500">
+                                          <Lock className="w-3 h-3 text-slate-400" />
+                                          <span>{statusConfig.label}</span>
+                                        </span>
+                                      ) : (
+                                        <div className="relative inline-flex items-center">
+                                          <select
+                                            value={order.status}
+                                            disabled={updatingOrderId === order.id}
+                                            onChange={(e) =>
+                                              handleStatusChange(order.id, e.target.value)
+                                            }
+                                            className={`text-xs font-bold px-2.5 py-1 rounded-lg border cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-400 ${statusConfig.badgeClass} ${
+                                              updatingOrderId === order.id ? 'opacity-60 cursor-not-allowed' : ''
+                                            }`}
+                                          >
+                                            <option value="incompleto">Faltante (Urgente)</option>
+                                            <option value="listo">Listo</option>
+                                            <option value="asignado">Asignado</option>
+                                            <option value="en_camino">En Camino</option>
+                                            <option value="entregado">Entregado</option>
+                                            <option value="cancelado">Cancelado</option>
+                                          </select>
+                                          {updatingOrderId === order.id && (
+                                            <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-700 ml-1.5" />
+                                          )}
+                                        </div>
+                                      )}
+                                    </td>
+
+                                    {/* 6. Repartidor */}
+                                    <td className="p-3 min-w-[150px]" onClick={(e) => e.stopPropagation()}>
+                                      {isLocked ? (
+                                        <span className="text-slate-400 font-medium text-xs flex items-center gap-1">
+                                          <Truck className="w-3.5 h-3.5 text-slate-400" />
+                                          <span>{order.assignedToName || 'Sin asignar'}</span>
+                                        </span>
+                                      ) : activeDrivers.length === 0 ? (
+                                        <span className="text-slate-400 text-[11px]">
+                                          Sin repartidores
+                                        </span>
+                                      ) : (
+                                        <div className="flex items-center gap-1.5">
+                                          {order.assignedTo ? (
+                                            <UserCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                          ) : (
+                                            <Truck className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                          )}
+                                          <select
+                                            value={order.assignedTo ?? ''}
+                                            onChange={(e) =>
+                                              handleAssignDriver(order.id, e.target.value)
+                                            }
+                                            disabled={isAssigning}
+                                            className={`text-xs px-2 py-1 rounded-lg border bg-white focus:outline-none focus:ring-2 focus:ring-brand-red/20 focus:border-brand-red cursor-pointer w-full ${
+                                              isAssigning ? 'opacity-50 cursor-not-allowed' : ''
+                                            } ${
+                                              order.assignedTo
+                                                ? 'border-emerald-300 text-emerald-700 font-semibold'
+                                                : 'border-slate-200 text-slate-500'
+                                            }`}
+                                          >
+                                            <option value="">Sin asignar</option>
+                                            {activeDrivers.map((d) => (
+                                              <option key={d.id} value={d.id}>
+                                                {d.name}
+                                              </option>
+                                            ))}
+                                          </select>
+                                        </div>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
                   );
                 })}

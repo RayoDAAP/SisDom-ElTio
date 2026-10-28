@@ -12,19 +12,10 @@ import {
   Building2,
   Phone,
   MapPin,
-  Calendar,
-  UserCheck,
-  ShoppingBag,
-  Flame,
-  Soup,
-  PlusCircle,
   Truck,
   FileText,
   CreditCard,
-  UtensilsCrossed,
-  Coffee,
   Banknote,
-  ArrowRightLeft,
   AlertTriangle,
   Lock,
 } from 'lucide-react';
@@ -54,6 +45,13 @@ const OrderDetailModal = ({
   const statusConfig = ORDER_STATUS_CONFIG[status] || ORDER_STATUS_CONFIG.listo;
   const isLocked = status === 'entregado' || status === 'cancelado';
 
+  const hasExtras =
+    items?.extras &&
+    (items.extras.salsaRed > 0 ||
+      items.extras.salsaGreen > 0 ||
+      items.extras.onion > 0 ||
+      (items.extras.tortillas && items.extras.tortillas !== 'none'));
+
   return (
     <div
       className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
@@ -66,116 +64,85 @@ const OrderDetailModal = ({
         className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] border border-slate-100 my-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Encabezado del Modal */}
-        <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
-          <div>
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-brand-yellow">
-              Detalles de Orden
-            </span>
-            <h2 id="order-detail-title" className="text-xl font-bold tracking-tight">
-              {id}
-            </h2>
-          </div>
-          <button
-            onClick={onClose}
-            aria-label="Cerrar ventana"
-            className="text-slate-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Barra de Estado */}
-        <div className="bg-slate-50 border-b border-slate-200 px-6 py-3 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Estado:</span>
-            <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border ${statusConfig.badgeClass}`}>
+        {/* B1. Encabezado Oscuro */}
+        <div className="bg-slate-900 text-white p-5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
+                Pedido
+              </span>
+              <h2 id="order-detail-title" className="text-xl font-bold tracking-tight text-white">
+                {id}
+              </h2>
+            </div>
+            <span
+              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ${statusConfig.badgeClass}`}
+            >
               {statusConfig.label}
             </span>
           </div>
 
-          {onStatusChange && (
-            <div className="flex items-center gap-2">
-              <label htmlFor="status-change-select" className="text-xs font-medium text-slate-600">
-                Cambiar a:
-              </label>
-              {isLocked ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-200 text-slate-700 text-xs font-bold">
-                  <Lock className="w-3.5 h-3.5 text-slate-500" />
-                  <span>{statusConfig.label}</span>
+          <div className="flex items-center gap-4">
+            {!hideFinancials && pricing?.total !== undefined && (
+              <div className="text-right">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
+                  Total
                 </span>
-              ) : (
-                <select
-                  id="status-change-select"
-                  value={status}
-                  onChange={(e) => onStatusChange(id, e.target.value)}
-                  className="text-xs font-semibold bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-brand-red/20 focus:border-brand-red cursor-pointer"
-                >
-                  <option value="incompleto">Faltante (Urgente)</option>
-                  <option value="listo">Listo para Entrega</option>
-                  <option value="asignado">Asignado a Repartidor</option>
-                  <option value="en_camino">En Camino</option>
-                  <option value="entregado">Entregado</option>
-                  <option value="cancelado">Cancelado</option>
-                </select>
-              )}
-            </div>
-          )}
+                <span className="text-xl sm:text-2xl font-black text-white">
+                  ${pricing.total}
+                </span>
+              </div>
+            )}
+            <button
+              onClick={onClose}
+              aria-label="Cerrar ventana"
+              className="text-slate-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400 cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
-        {/* Cuerpo del Modal */}
+        {/* B3. Cuerpo del Modal con scroll */}
         <div className="p-6 overflow-y-auto flex-1 flex flex-col gap-6">
           {/* Reporte de Faltante si existe */}
           {missingReport && (
-            <div className="p-4 bg-rose-50 border-2 border-rose-300 rounded-xl text-rose-950 flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-              <div className="space-y-1 flex-1">
+            <div className="p-3.5 bg-rose-50 border border-rose-300 rounded-xl text-rose-950 flex items-start gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <div className="space-y-1 flex-1 text-xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold uppercase tracking-wider text-rose-700">
+                  <span className="font-extrabold uppercase tracking-wider text-rose-700">
                     Reporte de Faltante en Pedido
                   </span>
                   <span className="text-[11px] text-rose-600">
-                    {missingReport.reportedAt ? new Date(missingReport.reportedAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : ''}
+                    {missingReport.reportedAt
+                      ? new Date(missingReport.reportedAt).toLocaleTimeString('es-MX', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })
+                      : ''}
                   </span>
                 </div>
-                <p className="text-sm font-bold text-rose-900 bg-white/70 p-2.5 rounded-lg border border-rose-200">
+                <p className="font-semibold text-rose-900 bg-white/70 p-2 rounded border border-rose-200">
                   {missingReport.note}
                 </p>
-                <div className="text-[11px] text-rose-700 font-medium">
+                <div className="text-[11px] text-rose-700">
                   Reportado por: <strong>{missingReport.reportedBy || 'Repartidor'}</strong>
                 </div>
               </div>
             </div>
           )}
-          {/* Metadatos */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200/80 text-xs">
-            <div className="flex items-center gap-2.5 text-slate-700">
-              <UserCheck className="w-4 h-4 text-slate-400 shrink-0" />
-              <div>
-                <span className="text-slate-400 block font-medium">Registrado por</span>
-                <span className="font-semibold">{createdBy || 'Auxiliar'}</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-2.5 text-slate-700">
-              <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
-              <div>
-                <span className="text-slate-400 block font-medium">Fecha y Hora</span>
-                <span className="font-semibold">{new Date(createdAt).toLocaleString('es-MX')}</span>
-              </div>
-            </div>
-          </div>
 
-          {/* Información del Cliente */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-              <User className="w-3.5 h-3.5" />
-              <span>Información del Cliente</span>
-            </h3>
+          {/* 1. Información del Cliente */}
+          <div className="space-y-2.5">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+              Información del Cliente
+            </span>
 
-            <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2 shadow-2xs">
+            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-slate-900 text-base">{client?.name}</span>
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
                   {client?.type === 'empresa' ? (
                     <>
                       <Building2 className="w-3 h-3 text-slate-500" />
@@ -191,22 +158,31 @@ const OrderDetailModal = ({
               </div>
 
               {client?.companyName && (
-                <div className="text-xs text-slate-600 flex items-center gap-1.5 pt-1">
+                <div className="text-xs text-slate-600 flex items-center gap-1.5">
                   <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                  <span><strong>Empresa:</strong> {client.companyName}</span>
+                  <span>
+                    <strong>Empresa:</strong> {client.companyName}
+                  </span>
                 </div>
               )}
 
-              <div className="text-xs text-slate-600 flex items-center gap-1.5">
-                <Phone className="w-3.5 h-3.5 text-slate-400" />
-                <span><strong>Teléfono:</strong> {client?.phone}</span>
-              </div>
+              {client?.phone && (
+                <div className="text-xs text-slate-600 flex items-center gap-1.5">
+                  <Phone className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="font-semibold">Teléfono:</span>
+                  <a
+                    href={`tel:${client.phone}`}
+                    className="text-brand-red font-bold hover:underline"
+                  >
+                    {client.phone}
+                  </a>
+                </div>
+              )}
 
-              <div className="text-xs text-slate-600 space-y-1.5 pt-1.5 border-t border-slate-100">
+              <div className="text-xs text-slate-600 space-y-2 pt-1 border-t border-slate-200/60">
                 {client?.deliveryType === 'recoger' ? (
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 flex items-center gap-2 text-amber-900 font-semibold">
-                    <Navigation className="w-4 h-4 text-amber-700 shrink-0" />
-                    <span>Pedido para Recoger en Sucursal (Sin envío)</span>
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-amber-900 font-semibold">
+                    Pedido para Recoger en Sucursal (Sin envío)
                   </div>
                 ) : (
                   <div className="flex items-start gap-1.5">
@@ -224,24 +200,21 @@ const OrderDetailModal = ({
                 )}
 
                 {client?.deliveryReferences && (
-                  <div className="text-xs text-amber-900 bg-amber-50/80 p-2 rounded-lg border border-amber-200">
+                  <div className="text-xs text-amber-900 bg-amber-50/90 p-2.5 rounded-lg border border-amber-200">
                     <strong>Referencias de Entrega:</strong> {client.deliveryReferences}
                   </div>
                 )}
 
                 {client?.lat && client?.lng && (
-                  <div className="flex items-center justify-between pt-1 pl-5">
-                    <span className="text-[11px] font-bold text-emerald-700 flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                      <span>Coordenadas GPS: {client.lat.toFixed(5)}, {client.lng.toFixed(5)}</span>
-                    </span>
+                  <div className="pt-1">
                     <a
                       href={`https://www.google.com/maps/search/?api=1&query=${client.lat},${client.lng}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-[11px] font-bold text-brand-red hover:underline flex items-center gap-1"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold transition-colors border border-slate-300 shadow-2xs"
                     >
-                      Ver en Google Maps ↗
+                      <MapPin className="w-3.5 h-3.5 text-brand-red" />
+                      <span>Abrir en Maps</span>
                     </a>
                   </div>
                 )}
@@ -249,127 +222,145 @@ const OrderDetailModal = ({
             </div>
           </div>
 
-          {/* Desglose de Ítems */}
+          {/* 2. Lo Pedido (Desglose compacto sin tarjetas de borde) */}
           <div className="space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-              <ShoppingBag className="w-3.5 h-3.5" />
-              <span>Desglose del Pedido</span>
-            </h3>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+              Lo Pedido
+            </span>
 
-            <div className="space-y-2.5">
+            <div className="space-y-3">
               {/* Tacos, Gorditas y Tostadas */}
               {items?.preparedItems && items.preparedItems.length > 0 && (
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5">
-                  <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5 mb-2">
-                    <UtensilsCrossed className="w-4 h-4 text-brand-red" />
-                    <span>Tacos, Gorditas y Tostadas</span>
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                    Tacos, Gorditas y Tostadas
+                  </span>
+                  <div className="space-y-1">
+                    {items.preparedItems.map((item, i) => (
+                      <div
+                        key={i}
+                        className="flex justify-between items-center text-xs text-slate-700 py-0.5"
+                      >
+                        <span>{item.label}</span>
+                        {!hideFinancials && (
+                          <span className="font-semibold text-slate-900">${item.price}</span>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                  {items.preparedItems.map((item, i) => (
-                    <div
-                      key={i}
-                      className="flex justify-between items-center text-xs text-slate-700 py-1 border-b border-slate-200/60 last:border-none"
-                    >
-                      <span>{item.label}</span>
-                      {!hideFinancials && <span className="font-semibold">${item.price}</span>}
-                    </div>
-                  ))}
                 </div>
               )}
 
               {/* Barbacoa */}
               {items?.barbacoa && items.barbacoa.length > 0 && (
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5">
-                  <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5 mb-2">
-                    <Flame className="w-4 h-4 text-amber-600" />
-                    <span>Barbacoa</span>
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                    Barbacoa
+                  </span>
+                  <div className="space-y-1">
+                    {items.barbacoa.map((b, i) => (
+                      <div
+                        key={i}
+                        className="flex justify-between items-center text-xs text-slate-700 py-0.5"
+                      >
+                        <span>{b.label}</span>
+                        {!hideFinancials && (
+                          <span className="font-semibold text-slate-900">${b.price}</span>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                  {items.barbacoa.map((b, i) => (
-                    <div
-                      key={i}
-                      className="flex justify-between items-center text-xs text-slate-700 py-1 border-b border-slate-200/60 last:border-none"
-                    >
-                      <span>{b.label}</span>
-                      {!hideFinancials && <span className="font-semibold">${b.price}</span>}
-                    </div>
-                  ))}
                 </div>
               )}
 
               {/* Menudo */}
               {items?.menudo && items.menudo.length > 0 && (
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5">
-                  <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5 mb-2">
-                    <Soup className="w-4 h-4 text-red-600" />
-                    <span>Menudo</span>
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                    Menudo
+                  </span>
+                  <div className="space-y-1">
+                    {items.menudo.map((m, i) => (
+                      <div
+                        key={i}
+                        className="flex justify-between items-center text-xs text-slate-700 py-0.5"
+                      >
+                        <span>{m.label}</span>
+                        {!hideFinancials && (
+                          <span className="font-semibold text-slate-900">${m.price}</span>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                  {items.menudo.map((m, i) => (
-                    <div
-                      key={i}
-                      className="flex justify-between items-center text-xs text-slate-700 py-1 border-b border-slate-200/60 last:border-none"
-                    >
-                      <span>{m.label}</span>
-                      {!hideFinancials && <span className="font-semibold">${m.price}</span>}
-                    </div>
-                  ))}
                 </div>
               )}
 
               {/* Bebidas */}
               {items?.drinks && items.drinks.length > 0 && (
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5">
-                  <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5 mb-2">
-                    <Coffee className="w-4 h-4 text-rose-600" />
-                    <span>Bebidas</span>
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                    Bebidas
+                  </span>
+                  <div className="space-y-1">
+                    {items.drinks.map((d, i) => (
+                      <div
+                        key={i}
+                        className="flex justify-between items-center text-xs text-slate-700 py-0.5"
+                      >
+                        <span>{d.label}</span>
+                        {!hideFinancials && (
+                          <span className="font-semibold text-slate-900">${d.price}</span>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                  {items.drinks.map((d, i) => (
-                    <div
-                      key={i}
-                      className="flex justify-between items-center text-xs text-slate-700 py-1 border-b border-slate-200/60 last:border-none"
-                    >
-                      <span>{d.label}</span>
-                      {!hideFinancials && <span className="font-semibold">${d.price}</span>}
-                    </div>
-                  ))}
                 </div>
               )}
 
-              {/* Extras */}
-              {items?.extras && (
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5">
-                  <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5 mb-2">
-                    <PlusCircle className="w-4 h-4 text-emerald-600" />
-                    <span>Complementos y Extras</span>
-                  </div>
+              {/* Complementos y Extras */}
+              {hasExtras && (
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                    Complementos y Extras
+                  </span>
                   <div className="space-y-1 text-xs text-slate-700">
                     {items.extras.salsaRed > 0 && (
-                      <div className="flex justify-between py-0.5">
+                      <div className="flex justify-between items-center py-0.5">
                         <span>Salsa Roja ({items.extras.salsaRed} pza)</span>
                         {!hideFinancials && (
-                          <span className="font-medium">${items.extras.salsaRed * 4}</span>
+                          <span className="font-semibold text-slate-900">
+                            ${items.extras.salsaRed * 4}
+                          </span>
                         )}
                       </div>
                     )}
                     {items.extras.salsaGreen > 0 && (
-                      <div className="flex justify-between py-0.5">
+                      <div className="flex justify-between items-center py-0.5">
                         <span>Salsa Verde ({items.extras.salsaGreen} pza)</span>
                         {!hideFinancials && (
-                          <span className="font-medium">${items.extras.salsaGreen * 4}</span>
+                          <span className="font-semibold text-slate-900">
+                            ${items.extras.salsaGreen * 4}
+                          </span>
                         )}
                       </div>
                     )}
                     {items.extras.onion > 0 && (
-                      <div className="flex justify-between py-0.5">
+                      <div className="flex justify-between items-center py-0.5">
                         <span>Cebolla ({items.extras.onion} pza)</span>
                         {!hideFinancials && (
-                          <span className="font-medium">${items.extras.onion * 4}</span>
+                          <span className="font-semibold text-slate-900">
+                            ${items.extras.onion * 4}
+                          </span>
                         )}
                       </div>
                     )}
                     {items.extras.tortillas && items.extras.tortillas !== 'none' && (
-                      <div className="flex justify-between py-0.5">
+                      <div className="flex justify-between items-center py-0.5">
                         <span>Tortillas ({items.extras.tortillasLabel || items.extras.tortillas})</span>
                         {!hideFinancials && (
-                          <span className="font-medium">${items.extras.tortillasPrice || 0}</span>
+                          <span className="font-semibold text-slate-900">
+                            ${items.extras.tortillasPrice || 0}
+                          </span>
                         )}
                       </div>
                     )}
@@ -377,110 +368,176 @@ const OrderDetailModal = ({
                 </div>
               )}
             </div>
-
-            {/* Método de Pago */}
-            {payment && (
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs text-slate-700">
-                <div className="font-bold text-slate-800 flex items-center gap-1.5 mb-1.5">
-                  <CreditCard className="w-4 h-4 text-brand-red" />
-                  <span>Método de Pago:</span>
-                  <span className="capitalize font-semibold text-slate-900">
-                    {payment.method || 'Efectivo'}
-                  </span>
-                </div>
-
-                {payment.method === PAYMENT_METHODS.EFECTIVO ? (
-                  <div className="flex items-center gap-4 text-slate-600">
-                    {!hideFinancials && payment.amountPaid && (
-                      <span>
-                        Paga con: <strong>${payment.amountPaid}</strong>
-                      </span>
-                    )}
-                    {!hideFinancials && payment.change !== null && (
-                      <span className="text-emerald-700 font-semibold">
-                        Cambio: ${payment.change}
-                      </span>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span>Estado transferencia:</span>
-                    <span
-                      className={`px-2 py-0.5 rounded font-bold text-[10px] ${
-                        payment.transferStatus === TRANSFER_STATUS.ACCEPTED
-                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                          : 'bg-amber-100 text-amber-800 border border-amber-300'
-                      }`}
-                    >
-                      {payment.transferStatus === TRANSFER_STATUS.ACCEPTED
-                        ? 'Aceptada / Validada'
-                        : 'Pendiente de Confirmar'}
-                    </span>
-                    {onPaymentStatusChange && !hideFinancials && (
-                      <button
-                        type="button"
-                        disabled={isUpdatingPayment}
-                        onClick={async () => {
-                          setIsUpdatingPayment(true);
-                          try {
-                            await onPaymentStatusChange(
-                              id,
-                              payment.transferStatus === TRANSFER_STATUS.ACCEPTED ? 'pendiente' : 'aceptada'
-                            );
-                          } finally {
-                            setIsUpdatingPayment(false);
-                          }
-                        }}
-                        className={`text-[11px] font-bold px-2 py-0.5 rounded bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center gap-1 ${
-                          isUpdatingPayment ? 'opacity-60 cursor-not-allowed' : ''
-                        }`}
-                      >
-                        {isUpdatingPayment ? 'Actualizando...' : `Marcar como ${payment.transferStatus === TRANSFER_STATUS.ACCEPTED ? 'Pendiente' : 'Aceptada'}`}
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {notes && (
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2">
-                <FileText className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-bold block">Notas de Entrega:</span>
-                  <span>{notes}</span>
-                </div>
-              </div>
-            )}
           </div>
 
-          {/* Resumen Financiero (Oculto para Auxiliar) */}
-          {!hideFinancials && pricing && (
-            <div className="border-t border-slate-200 pt-4 space-y-1.5 text-xs text-slate-600">
-              <div className="flex justify-between">
-                <span>Subtotal productos:</span>
-                <span className="font-medium text-slate-800">${pricing.subtotal}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="flex items-center gap-1">
-                  <Truck className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Cargo por envío:</span>
-                </span>
-                <span className="font-medium text-slate-800">${pricing.shippingFee}</span>
-              </div>
-              <div className="flex justify-between items-center text-base font-extrabold text-brand-red border-t border-slate-200 pt-2.5">
-                <span className="flex items-center gap-1.5">
-                  <CreditCard className="w-4 h-4" />
-                  <span>TOTAL PEDIDO:</span>
-                </span>
-                <span>${pricing.total}</span>
+          {/* 3. Pago y Totales (Solo si !hideFinancials) */}
+          {!hideFinancials && (
+            <div className="space-y-3 pt-3 border-t border-slate-100">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                Pago y Totales
+              </span>
+
+              {/* Método de Pago */}
+              {payment && (
+                <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-xs text-slate-700 space-y-2">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-1.5 font-semibold text-slate-800">
+                      {payment.method === PAYMENT_METHODS.EFECTIVO ? (
+                        <Banknote className="w-4 h-4 text-emerald-600" />
+                      ) : (
+                        <CreditCard className="w-4 h-4 text-brand-red" />
+                      )}
+                      <span>Método de pago:</span>
+                      <span className="capitalize text-slate-900">
+                        {payment.method || 'Efectivo'}
+                      </span>
+                    </div>
+
+                    {payment.method !== PAYMENT_METHODS.EFECTIVO && (
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                          payment.transferStatus === TRANSFER_STATUS.ACCEPTED
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-amber-50 text-amber-800 border-amber-200'
+                        }`}
+                      >
+                        {payment.transferStatus === TRANSFER_STATUS.ACCEPTED
+                          ? 'Transferencia Aceptada'
+                          : 'Transferencia Pendiente'}
+                      </span>
+                    )}
+                  </div>
+
+                  {payment.method === PAYMENT_METHODS.EFECTIVO ? (
+                    <div className="flex items-center gap-4 text-slate-600 pt-0.5">
+                      {payment.amountPaid && (
+                        <span>
+                          Paga con: <strong>${payment.amountPaid}</strong>
+                        </span>
+                      )}
+                      {payment.change !== null && payment.change !== undefined && (
+                        <span className="text-emerald-700 font-semibold">
+                          Cambio: ${payment.change}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    onPaymentStatusChange && (
+                      <div className="pt-0.5">
+                        <button
+                          type="button"
+                          disabled={isUpdatingPayment}
+                          onClick={async () => {
+                            const isAccepted = payment.transferStatus === TRANSFER_STATUS.ACCEPTED;
+                            const targetStatus = isAccepted ? 'pendiente' : 'aceptada';
+                            const confirmMsg = isAccepted
+                              ? '¿Marcar la transferencia como pendiente?'
+                              : '¿Marcar la transferencia como aceptada?';
+
+                            if (!window.confirm(confirmMsg)) return;
+
+                            setIsUpdatingPayment(true);
+                            try {
+                              await onPaymentStatusChange(id, targetStatus);
+                            } catch (err) {
+                              console.error('Error al actualizar estado de transferencia:', err);
+                            } finally {
+                              setIsUpdatingPayment(false);
+                            }
+                          }}
+                          className={`text-[11px] font-medium text-slate-500 hover:text-slate-800 underline cursor-pointer inline-flex items-center gap-1 ${
+                            isUpdatingPayment ? 'opacity-50 cursor-not-allowed' : ''
+                          }`}
+                        >
+                          {isUpdatingPayment
+                            ? 'Actualizando...'
+                            : payment.transferStatus === TRANSFER_STATUS.ACCEPTED
+                            ? 'Marcar como Pendiente'
+                            : 'Marcar como Aceptada'}
+                        </button>
+                      </div>
+                    )
+                  )}
+                </div>
+              )}
+
+              {/* Totales */}
+              {pricing && (
+                <div className="space-y-1.5 text-xs text-slate-600 pt-1">
+                  <div className="flex justify-between">
+                    <span>Subtotal productos:</span>
+                    <span className="font-semibold text-slate-800">${pricing.subtotal}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="flex items-center gap-1">
+                      <Truck className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Cargo por envío:</span>
+                    </span>
+                    <span className="font-semibold text-slate-800">${pricing.shippingFee}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm font-black text-brand-red border-t border-slate-200 pt-2">
+                    <span>TOTAL:</span>
+                    <span>${pricing.total}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 4. Notas */}
+          {notes && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2">
+              <FileText className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold block">Notas de Entrega:</span>
+                <span>{notes}</span>
               </div>
             </div>
           )}
+
+          {/* 5. Metadatos al fondo */}
+          <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-400 flex flex-wrap items-center justify-between gap-1">
+            <span>
+              Registrado por:{' '}
+              <strong className="text-slate-600 font-semibold">{createdBy || 'Auxiliar'}</strong>
+            </span>
+            <span>{new Date(createdAt).toLocaleString('es-MX')}</span>
+          </div>
         </div>
 
-        {/* Pie de Página */}
-        <div className="bg-slate-50 border-t border-slate-200 px-6 py-3.5 flex justify-end">
+        {/* B2. Pie Fijo del Modal */}
+        <div className="bg-slate-50 border-t border-slate-200 px-6 py-3.5 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            {isLocked ? (
+              <span className="inline-flex items-center gap-1.5 text-xs text-slate-500 font-medium">
+                <Lock className="w-3.5 h-3.5 text-slate-400" />
+                <span>Pedido finalizado: estado bloqueado</span>
+              </span>
+            ) : onStatusChange ? (
+              <div className="flex items-center gap-2">
+                <label
+                  htmlFor="modal-status-select"
+                  className="text-xs font-semibold text-slate-600"
+                >
+                  Cambiar a:
+                </label>
+                <select
+                  id="modal-status-select"
+                  value={status}
+                  onChange={(e) => onStatusChange(id, e.target.value)}
+                  className="text-xs font-semibold bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-brand-red/20 focus:border-brand-red cursor-pointer"
+                >
+                  <option value="incompleto">Faltante (Urgente)</option>
+                  <option value="listo">Listo</option>
+                  <option value="asignado">Asignado</option>
+                  <option value="en_camino">En Camino</option>
+                  <option value="entregado">Entregado</option>
+                  <option value="cancelado">Cancelado</option>
+                </select>
+              </div>
+            ) : null}
+          </div>
+
           <Button variant="outline" size="md" onClick={onClose}>
             Cerrar
           </Button>
