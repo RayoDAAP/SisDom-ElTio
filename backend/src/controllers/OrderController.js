@@ -24,7 +24,7 @@ export const getOrders = async (req, res) => {
 export const getOrderById = async (req, res) => {
   try {
     const order = await OrderService.getOrderById(req.params.id);
-    if (!order) {
+    if (!order || !OrderService.canAccessOrder(order, req.user)) {
       return sendError(res, 404, 'Pedido no encontrado');
     }
     return sendSuccess(res, 200, 'Detalle del pedido', { order });
@@ -38,7 +38,12 @@ export const getOrderById = async (req, res) => {
  */
 export const createOrder = async (req, res) => {
   try {
-    const orderData = req.body;
+    const orderData = { ...req.body };
+    if (req.user?.role !== 'admin') {
+      delete orderData.assignedTo;
+      delete orderData.assignedToName;
+    }
+
     if (!orderData.client || !orderData.items || !orderData.pricing) {
       return sendError(res, 400, 'Datos del pedido incompletos');
     }
@@ -61,7 +66,7 @@ export const updateOrderStatus = async (req, res) => {
       return sendError(res, 400, 'El estado es requerido');
     }
 
-    const updatedOrder = await OrderService.updateOrderStatus(req.params.id, status);
+    const updatedOrder = await OrderService.updateOrderStatus(req.params.id, status, req.user);
     return sendSuccess(res, 200, 'Estado del pedido actualizado', { order: updatedOrder });
   } catch (error) {
     return sendError(res, 400, error.message);
@@ -121,7 +126,9 @@ export const updatePaymentStatus = async (req, res) => {
  */
 export const getDriverRoute = async (req, res) => {
   try {
-    const driverId = req.query.driverId || req.user?.id;
+    const driverId = req.user?.role === 'admin'
+      ? (req.query.driverId || req.user?.id)
+      : req.user?.id;
     if (!driverId) {
       return sendError(res, 400, 'Se requiere identificar al repartidor');
     }

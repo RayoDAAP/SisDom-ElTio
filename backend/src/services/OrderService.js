@@ -157,16 +157,42 @@ export const createOrder = async (orderData, createdByName) => {
 };
 
 /**
+ * Determina si un usuario tiene acceso a un pedido específico.
+ * Si user.role es REPARTIDOR, solo accede si el pedido está asignado a él.
+ * Para cualquier otro rol, devuelve true.
+ * @param {object} order
+ * @param {object} user
+ * @returns {boolean}
+ */
+export const canAccessOrder = (order, user) => {
+  if (user?.role === USER_ROLES.REPARTIDOR) {
+    return order?.assignedTo !== null && order?.assignedTo !== undefined && Number(order.assignedTo) === Number(user.id);
+  }
+  return true;
+};
+
+export const DRIVER_ALLOWED_STATUSES = [ORDER_STATUS.ON_THE_WAY, ORDER_STATUS.DELIVERED];
+
+/**
  * Actualiza el estado de un pedido.
  * Si el pedido ya está entregado o cancelado, queda bloqueado y no se puede modificar.
  * @param {string} id
  * @param {string} newStatus
+ * @param {object|null} requestingUser
  * @returns {Promise<object>}
  */
-export const updateOrderStatus = async (id, newStatus) => {
+export const updateOrderStatus = async (id, newStatus, requestingUser = null) => {
   const order = await getOrderById(id);
   if (!order) {
     throw new Error('Pedido no encontrado');
+  }
+
+  if (!canAccessOrder(order, requestingUser)) {
+    throw new Error('Pedido no encontrado');
+  }
+
+  if (requestingUser?.role === USER_ROLES.REPARTIDOR && !DRIVER_ALLOWED_STATUSES.includes(newStatus)) {
+    throw new Error('No tienes permiso para asignar ese estado');
   }
 
   // Regla: Una vez entregado o cancelado, su estado queda bloqueado permanentemente
@@ -272,6 +298,10 @@ export const assignOrder = async (id, driverId) => {
 export const reportMissingItems = async (id, missingNote, reportingUser = null) => {
   const order = await getOrderById(id);
   if (!order) {
+    throw new Error('Pedido no encontrado');
+  }
+
+  if (!canAccessOrder(order, reportingUser)) {
     throw new Error('Pedido no encontrado');
   }
 

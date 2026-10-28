@@ -33,7 +33,7 @@ router.patch('/:id/status', updateOrderStatus);
 router.post('/:id/report-missing', reportMissingItems);
 
 // Actualización del estado de transferencia bancaria
-router.patch('/:id/payment-status', updatePaymentStatus);
+router.patch('/:id/payment-status', authorize(USER_ROLES.ADMIN), updatePaymentStatus);
 
 // Solo el administrador puede asignar repartidores a pedidos
 router.patch('/:id/assign', authorize(USER_ROLES.ADMIN), assignOrder);
