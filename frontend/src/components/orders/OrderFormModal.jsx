@@ -10,7 +10,8 @@
  *              - Complementos a $4 (default 0) y paquetes de tortillas ($7, $9, $15, $30).
  *              - Métodos de pago: Efectivo (cálculo de cambio en tiempo real) y Transferencia (pendiente / aceptada).
  */
-import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import InteractiveMap from '../common/InteractiveMap';
 import {
   X,
   User,
@@ -105,14 +106,11 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
   const [deliveryReferences, setDeliveryReferences] = useState('');
   const [coordinates, setCoordinates] = useState(null); // { lat, lng }
   const [isVerified, setIsVerified] = useState(false);
-  const [locationPrecision, setLocationPrecision] = useState(null); // null | "exact" | "street" | "colonia" | "municipio" | "manual" | "saved"
+  const [locationPrecision, setLocationPrecision] = useState(null); // null | "exact" | "interpolated" | "street" | "colonia" | "municipio" | "manual" | "saved"
   const [mapCollapsed, setMapCollapsed] = useState(false);
+  const [recenterToken, setRecenterToken] = useState(0);
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [geocodeResult, setGeocodeResult] = useState(null);
-
-  const mapContainerRef = useRef(null);
-  const mapInstanceRef = useRef(null);
-  const markerInstanceRef = useRef(null);
 
   const [isSearchingClient, setIsSearchingClient] = useState(false);
   const [clientFound, setClientFound] = useState(false);
@@ -156,38 +154,11 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Función para mover el pin y actualizar coordenadas (idéntico a ine-scanner)
-  const updateMapPin = useCallback((lat, lng, labelText = '', options = {}) => {
-    const { verified = true, precision } = options;
-    let nLat = parseFloat(lat);
-    let nLng = parseFloat(lng);
-    if (isNaN(nLat) || isNaN(nLng)) return;
-    if (nLng > 0) nLng = -nLng; // Asegurar signo negativo en longitud en México
-
-    setCoordinates({ lat: nLat, lng: nLng });
-    if (verified) setIsVerified(true);
-    if (precision !== undefined) setLocationPrecision(precision);
-
-    if (!mapInstanceRef.current || !window.L) return;
-
-    const latLng = [nLat, nLng];
-
-    if (!markerInstanceRef.current) {
-      markerInstanceRef.current = window.L.marker(latLng, { draggable: true }).addTo(mapInstanceRef.current);
-      markerInstanceRef.current.on('dragend', (e) => {
-        const pos = e.target.getLatLng();
-        let dragLat = parseFloat(pos.lat.toFixed(6));
-        let dragLng = pos.lng > 0 ? -pos.lng : pos.lng;
-        dragLng = parseFloat(dragLng.toFixed(6));
-        setCoordinates({ lat: dragLat, lng: dragLng });
-        setIsVerified(true);
-        setLocationPrecision('manual');
-      });
-    } else {
-      markerInstanceRef.current.setLatLng(latLng);
-    }
-
-    mapInstanceRef.current.setView(latLng, 16);
+  // ─── Callback de InteractiveMap: clic o arrastre del pin ──────────────────
+  const handleMapChange = useCallback(({ lat, lng }) => {
+    setCoordinates({ lat, lng });
+    setLocationPrecision('manual');
+    setIsVerified(true);
   }, []);
 
   // ─── Búsqueda Automática de Cliente por Teléfono ────────────────────────────
@@ -211,10 +182,7 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
           setDeliveryReferences(found.deliveryReferences || '');
           if (found.lat && found.lng) {
             setCoordinates({ lat: found.lat, lng: found.lng });
-            // Mueve el pin si el mapa ya existe
-            if (mapInstanceRef.current && window.L) {
-              updateMapPin(found.lat, found.lng, '', { verified: Boolean(found.isVerified), precision: found.isVerified ? 'saved' : null });
-            }
+            setRecenterToken((t) => t + 1);
           } else {
             setCoordinates(null);
           }
@@ -247,48 +215,7 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
     } else {
       setClientFound(false);
     }
-  }, [updateMapPin]);
-
-  // Inicializar mapa de Leaflet una vez montado el contenedor
-  useEffect(() => {
-    if (deliveryType !== 'domicilio') return;
-
-    const timer = setTimeout(() => {
-      if (!mapContainerRef.current || !window.L) return;
-
-      if (!mapInstanceRef.current) {
-        const defaultLat = coordinates?.lat || 25.7428;
-        const defaultLng = coordinates?.lng || -100.2872;
-
-        const map = window.L.map(mapContainerRef.current).setView([defaultLat, defaultLng], coordinates ? 16 : 13);
-        window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          maxZoom: 19,
-          attribution: '© OpenStreetMap',
-        }).addTo(map);
-
-        // Clic directo en el mapa ajusta la ubicación exacta (igual que ine-scanner)
-        map.on('click', (e) => {
-          updateMapPin(e.latlng.lat, e.latlng.lng, 'Ubicación seleccionada en el mapa', { verified: true, precision: 'manual' });
-        });
-
-        mapInstanceRef.current = map;
-
-        // Si ya hay coordenadas iniciales (ej. cliente autocompletado)
-        if (coordinates?.lat && coordinates?.lng) {
-          updateMapPin(coordinates.lat, coordinates.lng);
-        }
-
-        // Forzar cálculo de dimensiones de Leaflet dentro del modal de React
-        map.invalidateSize();
-      } else {
-        mapInstanceRef.current.invalidateSize();
-      }
-    }, 150);
-
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [deliveryType]);
+  }, []);
 
   // ─── Verificación Manual de Dirección / Coordenadas ─────────────────────────
   const handleVerifyAddress = async () => {
@@ -311,11 +238,10 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
         setGeocodeResult(res);
         const precision = res.precision || (res.isApproximate ? 'street' : 'exact');
         setLocationPrecision(precision);
-        const isExact = precision === 'exact';
-        setIsVerified(isExact);
-        updateMapPin(res.lat, res.lng, res.displayName, { verified: isExact, precision });
+        setIsVerified(precision === 'exact');
+        setRecenterToken((t) => t + 1);
         // Si no es exacto, expandir el mapa para que el usuario ajuste
-        if (!isExact) {
+        if (precision !== 'exact') {
           setMapCollapsed(false);
         }
       }
@@ -659,7 +585,7 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
           deliveryReferences: isPickup ? (notes || 'Pasa a recoger') : deliveryReferences,
           lat: isPickup ? 25.73464270666944 : (coordinates?.lat || null),
           lng: isPickup ? -100.24216940421442 : (coordinates?.lng || null),
-          isVerified: isPickup ? true : isVerified,
+          isVerified: isPickup ? true : (locationPrecision === 'exact' || locationPrecision === 'manual' || locationPrecision === 'saved'),
         },
         items,
         payment,
@@ -947,16 +873,11 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
                     <div className="sm:col-span-2 md:col-span-3 p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between text-xs text-blue-900">
                       <div className="flex items-center gap-2 font-semibold">
                         <CheckCircle2 className="w-4 h-4 text-blue-600" />
-                        <span>Ubicación guardada - Ver / ajustar en el mapa</span>
+                        <span>Ubicación guardada ✓ — Ver / ajustar en el mapa</span>
                       </div>
                       <button
                         type="button"
-                        onClick={() => {
-                          setMapCollapsed(false);
-                          setTimeout(() => {
-                            mapInstanceRef.current?.invalidateSize();
-                          }, 100);
-                        }}
+                        onClick={() => setMapCollapsed(false)}
                         className="px-2.5 py-1 rounded-lg bg-white border border-blue-300 font-bold text-blue-800 hover:bg-blue-100 transition-colors cursor-pointer"
                       >
                         Ver / ajustar
@@ -964,7 +885,7 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
                     </div>
                   )}
 
-                  {/* Verificación de Dirección con Mapa Interactivo (montado siempre para no perder Leaflet) */}
+                  {/* Verificación de Dirección con Mapa Interactivo (montado siempre para no perder estado) */}
                   <div
                     className={`sm:col-span-2 md:col-span-3 rounded-xl overflow-hidden border border-slate-300 shadow-sm bg-white ${
                       mapCollapsed ? 'hidden' : 'block'
@@ -974,7 +895,7 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                           <span>Ubicación y Coordenadas GPS</span>
-                          {isVerified ? (
+                          {(locationPrecision === 'exact' || locationPrecision === 'manual' || locationPrecision === 'saved') ? (
                             <span className="text-[10px] bg-emerald-100 text-emerald-800 font-extrabold px-1.5 py-0.5 rounded border border-emerald-300">
                               Confirmada
                             </span>
@@ -1014,14 +935,19 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
                       >
                         <span>
                           {locationPrecision === 'exact' && 'Ubicación exacta (número encontrado)'}
+                          {locationPrecision === 'interpolated' &&
+                            'Posición estimada en la cuadra. Revisa y ajusta el pin si hace falta.'}
                           {locationPrecision === 'street' &&
-                            'Aproximada a la calle: el número no está en el mapa. Arrastra el pin a la casa o haz clic en el mapa.'}
-                          {(locationPrecision === 'colonia' || locationPrecision === 'municipio') &&
-                            'Aproximada a la colonia/municipio: ubica el punto manualmente.'}
+                            'Solo se encontró la calle: el número no está en el mapa. Arrastra el pin a la casa o haz clic en el mapa.'}
+                          {locationPrecision === 'colonia' &&
+                            'Solo se ubicó la colonia. Coloca el pin manualmente.'}
+                          {locationPrecision === 'municipio' &&
+                            'Ubicación aproximada del municipio. Coloca el pin manualmente.'}
                           {locationPrecision === 'manual' && 'Ubicación confirmada manualmente'}
                           {locationPrecision === 'saved' && 'Ubicación guardada del cliente'}
                         </span>
-                        {(locationPrecision === 'street' ||
+                        {(locationPrecision === 'interpolated' ||
+                          locationPrecision === 'street' ||
                           locationPrecision === 'colonia' ||
                           locationPrecision === 'municipio') && (
                           <button
@@ -1040,7 +966,13 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
 
                     {/* Contenedor del Mapa Leaflet Interactivo: h-40 en móvil, h-52 en sm */}
                     <div className="relative w-full h-40 sm:h-52 bg-slate-100">
-                      <div ref={mapContainerRef} className="w-full h-full z-0" />
+                      <InteractiveMap
+                        lat={coordinates?.lat}
+                        lng={coordinates?.lng}
+                        recenterToken={recenterToken}
+                        onChange={handleMapChange}
+                        className="w-full h-full"
+                      />
                       {coordinates && (
                         <a
                           href={`https://www.google.com/maps?q=${coordinates.lat},${coordinates.lng}`}
