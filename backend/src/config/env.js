@@ -20,6 +20,7 @@ const env = {
   NODE_ENV: process.env.NODE_ENV || 'development',
   SUPABASE_URL: process.env.SUPABASE_URL || '',
   SUPABASE_KEY: process.env.SUPABASE_KEY || process.env.SUPABASE_SECRET_KEY || '',
+  MAPBOX_TOKEN: process.env.MAPBOX_TOKEN || '',
   BRANCH_LOCATION: {
     name: 'Tacos El Tío (Sucursal San Nicolás)',
     lat: 25.73464270666944,
