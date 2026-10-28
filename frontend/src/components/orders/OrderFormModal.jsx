@@ -53,6 +53,32 @@ import {
 import Button from '../common/Button';
 import Input from '../common/Input';
 
+const QtyStepper = ({ value, onChange, min = 0, max = 99, label = '' }) => (
+  <div className="flex items-center gap-1">
+    <button
+      type="button"
+      aria-label={`Disminuir ${label}`}
+      onClick={() => onChange(Math.max(min, value - 1))}
+      disabled={value <= min}
+      className="w-9 h-9 min-w-9 flex items-center justify-center rounded-lg border border-slate-300 bg-slate-50 text-slate-700 font-bold text-base hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors select-none"
+    >
+      -
+    </button>
+    <span className="w-8 text-center font-extrabold text-sm text-slate-900 tabular-nums select-none">
+      {value}
+    </span>
+    <button
+      type="button"
+      aria-label={`Aumentar ${label}`}
+      onClick={() => onChange(Math.min(max, value + 1))}
+      disabled={value >= max}
+      className="w-9 h-9 min-w-9 flex items-center justify-center rounded-lg border border-slate-300 bg-slate-50 text-slate-700 font-bold text-base hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors select-none"
+    >
+      +
+    </button>
+  </div>
+);
+
 const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
   // Manejo de la tecla Escape para cerrar
   useEffect(() => {
@@ -79,6 +105,8 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
   const [deliveryReferences, setDeliveryReferences] = useState('');
   const [coordinates, setCoordinates] = useState(null); // { lat, lng }
   const [isVerified, setIsVerified] = useState(false);
+  const [locationPrecision, setLocationPrecision] = useState(null); // null | "exact" | "street" | "colonia" | "municipio" | "manual" | "saved"
+  const [mapCollapsed, setMapCollapsed] = useState(false);
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [geocodeResult, setGeocodeResult] = useState(null);
 
@@ -128,6 +156,40 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
+  // Función para mover el pin y actualizar coordenadas (idéntico a ine-scanner)
+  const updateMapPin = useCallback((lat, lng, labelText = '', options = {}) => {
+    const { verified = true, precision } = options;
+    let nLat = parseFloat(lat);
+    let nLng = parseFloat(lng);
+    if (isNaN(nLat) || isNaN(nLng)) return;
+    if (nLng > 0) nLng = -nLng; // Asegurar signo negativo en longitud en México
+
+    setCoordinates({ lat: nLat, lng: nLng });
+    if (verified) setIsVerified(true);
+    if (precision !== undefined) setLocationPrecision(precision);
+
+    if (!mapInstanceRef.current || !window.L) return;
+
+    const latLng = [nLat, nLng];
+
+    if (!markerInstanceRef.current) {
+      markerInstanceRef.current = window.L.marker(latLng, { draggable: true }).addTo(mapInstanceRef.current);
+      markerInstanceRef.current.on('dragend', (e) => {
+        const pos = e.target.getLatLng();
+        let dragLat = parseFloat(pos.lat.toFixed(6));
+        let dragLng = pos.lng > 0 ? -pos.lng : pos.lng;
+        dragLng = parseFloat(dragLng.toFixed(6));
+        setCoordinates({ lat: dragLat, lng: dragLng });
+        setIsVerified(true);
+        setLocationPrecision('manual');
+      });
+    } else {
+      markerInstanceRef.current.setLatLng(latLng);
+    }
+
+    mapInstanceRef.current.setView(latLng, 16);
+  }, []);
+
   // ─── Búsqueda Automática de Cliente por Teléfono ────────────────────────────
   const handlePhoneChange = useCallback(async (newPhone) => {
     setClientPhone(newPhone);
@@ -149,12 +211,20 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
           setDeliveryReferences(found.deliveryReferences || '');
           if (found.lat && found.lng) {
             setCoordinates({ lat: found.lat, lng: found.lng });
+            // Mueve el pin si el mapa ya existe
+            if (mapInstanceRef.current && window.L) {
+              updateMapPin(found.lat, found.lng, '', { verified: Boolean(found.isVerified), precision: found.isVerified ? 'saved' : null });
+            }
           } else {
             setCoordinates(null);
           }
+          const newPrecision = found.isVerified ? 'saved' : null;
+          setLocationPrecision(newPrecision);
           setIsVerified(Boolean(found.isVerified));
           setGeocodeResult(null);
           setClientFound(true);
+          // Si tiene ubicación guardada, colapsar el mapa; si no, expandir
+          setMapCollapsed(Boolean(found.isVerified && found.lat && found.lng));
 
           if (found.colonia) {
             const fee = await fetchShippingFeeByColoniaRequest(found.colonia);
@@ -166,6 +236,8 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
           setClientFound(false);
           setIsVerified(false);
           setCoordinates(null);
+          setLocationPrecision(null);
+          setMapCollapsed(false);
         }
       } catch (err) {
         console.error('Error al buscar cliente por teléfono:', err);
@@ -175,38 +247,7 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
     } else {
       setClientFound(false);
     }
-  }, []);
-
-  // Función para mover el pin y actualizar coordenadas (idéntico a ine-scanner)
-  const updateMapPin = useCallback((lat, lng, labelText = '') => {
-    let nLat = parseFloat(lat);
-    let nLng = parseFloat(lng);
-    if (isNaN(nLat) || isNaN(nLng)) return;
-    if (nLng > 0) nLng = -nLng; // Asegurar signo negativo en longitud en México
-
-    setCoordinates({ lat: nLat, lng: nLng });
-    setIsVerified(true);
-
-    if (!mapInstanceRef.current || !window.L) return;
-
-    const latLng = [nLat, nLng];
-
-    if (!markerInstanceRef.current) {
-      markerInstanceRef.current = window.L.marker(latLng, { draggable: true }).addTo(mapInstanceRef.current);
-      markerInstanceRef.current.on('dragend', (e) => {
-        const pos = e.target.getLatLng();
-        let dragLat = parseFloat(pos.lat.toFixed(6));
-        let dragLng = pos.lng > 0 ? -pos.lng : pos.lng;
-        dragLng = parseFloat(dragLng.toFixed(6));
-        setCoordinates({ lat: dragLat, lng: dragLng });
-        setIsVerified(true);
-      });
-    } else {
-      markerInstanceRef.current.setLatLng(latLng);
-    }
-
-    mapInstanceRef.current.setView(latLng, 16);
-  }, []);
+  }, [updateMapPin]);
 
   // Inicializar mapa de Leaflet una vez montado el contenedor
   useEffect(() => {
@@ -227,7 +268,7 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
 
         // Clic directo en el mapa ajusta la ubicación exacta (igual que ine-scanner)
         map.on('click', (e) => {
-          updateMapPin(e.latlng.lat, e.latlng.lng, 'Ubicación seleccionada en el mapa');
+          updateMapPin(e.latlng.lat, e.latlng.lng, 'Ubicación seleccionada en el mapa', { verified: true, precision: 'manual' });
         });
 
         mapInstanceRef.current = map;
@@ -268,8 +309,15 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
       if (res && res.lat && res.lng) {
         setCoordinates({ lat: res.lat, lng: res.lng });
         setGeocodeResult(res);
-        setIsVerified(true);
-        updateMapPin(res.lat, res.lng, res.displayName);
+        const precision = res.precision || (res.isApproximate ? 'street' : 'exact');
+        setLocationPrecision(precision);
+        const isExact = precision === 'exact';
+        setIsVerified(isExact);
+        updateMapPin(res.lat, res.lng, res.displayName, { verified: isExact, precision });
+        // Si no es exacto, expandir el mapa para que el usuario ajuste
+        if (!isExact) {
+          setMapCollapsed(false);
+        }
       }
     } catch (err) {
       console.error('Error al geocodificar dirección:', err);
@@ -504,6 +552,7 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
     tortillasOption,
     shippingFee,
     amountPaid,
+    deliveryType,
   ]);
 
   // ─── Enviar Formulario ──────────────────────────────────────────────────────
@@ -662,20 +711,21 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
           </button>
         </div>
 
-        {/* Formulario */}
-        <form onSubmit={handleSubmit} noValidate className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
-          {errorMsg && (
-            <div
-              className="p-3.5 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2.5 text-xs text-red-800 font-medium"
-              role="alert"
-            >
-              <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-              <span>{errorMsg}</span>
-            </div>
-          )}
+        {/* Formulario con pie fijo */}
+        <form onSubmit={handleSubmit} noValidate className="flex-1 flex flex-col min-h-0">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+            {errorMsg && (
+              <div
+                className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2.5 text-xs text-red-800 font-medium"
+                role="alert"
+              >
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                <span>{errorMsg}</span>
+              </div>
+            )}
 
-          {/* 1. Datos del Cliente */}
-          <section className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 sm:p-5 space-y-4">
+            {/* 1. Datos del Cliente */}
+            <section className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 sm:p-4 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/60 pb-3">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                 <User className="w-4 h-4 text-brand-red" />
@@ -757,6 +807,7 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
                   placeholder="6141234567"
                   icon={Phone}
                   required
+                  autoFocus
                 />
                 {isSearchingClient && (
                   <span className="absolute right-3 top-8 text-[11px] text-slate-400">
@@ -891,9 +942,35 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
                     placeholder="Casa blanca, portón negro, al lado del Oxxo"
                   />
 
-                  {/* Verificación de Dirección con Mapa Interactivo (estilo INE Scanner) */}
-                  <div className="sm:col-span-2 md:col-span-3 rounded-xl overflow-hidden border border-slate-300 shadow-sm bg-white">
-                    <div className="bg-slate-50 border-b border-slate-200 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2">
+                  {/* Si el mapa está colapsado (ej. cliente autocompletado con ubicación guardada) */}
+                  {mapCollapsed && (
+                    <div className="sm:col-span-2 md:col-span-3 p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between text-xs text-blue-900">
+                      <div className="flex items-center gap-2 font-semibold">
+                        <CheckCircle2 className="w-4 h-4 text-blue-600" />
+                        <span>Ubicación guardada - Ver / ajustar en el mapa</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMapCollapsed(false);
+                          setTimeout(() => {
+                            mapInstanceRef.current?.invalidateSize();
+                          }, 100);
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-white border border-blue-300 font-bold text-blue-800 hover:bg-blue-100 transition-colors cursor-pointer"
+                      >
+                        Ver / ajustar
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Verificación de Dirección con Mapa Interactivo (montado siempre para no perder Leaflet) */}
+                  <div
+                    className={`sm:col-span-2 md:col-span-3 rounded-xl overflow-hidden border border-slate-300 shadow-sm bg-white ${
+                      mapCollapsed ? 'hidden' : 'block'
+                    }`}
+                  >
+                    <div className="bg-slate-50 border-b border-slate-200 px-3.5 py-2 flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                           <span>Ubicación y Coordenadas GPS</span>
@@ -924,8 +1001,45 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
                       </div>
                     </div>
 
-                    {/* Contenedor del Mapa Leaflet Interactivo */}
-                    <div className="relative w-full h-52 bg-slate-100">
+                    {/* Etiqueta de precisión según locationPrecision */}
+                    {locationPrecision && (
+                      <div
+                        className={`px-3.5 py-2 text-xs font-semibold flex items-center justify-between gap-2 border-b ${
+                          locationPrecision === 'exact'
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                            : locationPrecision === 'manual' || locationPrecision === 'saved'
+                            ? 'bg-blue-50 text-blue-800 border-blue-200'
+                            : 'bg-amber-50 text-amber-800 border-amber-200'
+                        }`}
+                      >
+                        <span>
+                          {locationPrecision === 'exact' && 'Ubicación exacta (número encontrado)'}
+                          {locationPrecision === 'street' &&
+                            'Aproximada a la calle: el número no está en el mapa. Arrastra el pin a la casa o haz clic en el mapa.'}
+                          {(locationPrecision === 'colonia' || locationPrecision === 'municipio') &&
+                            'Aproximada a la colonia/municipio: ubica el punto manualmente.'}
+                          {locationPrecision === 'manual' && 'Ubicación confirmada manualmente'}
+                          {locationPrecision === 'saved' && 'Ubicación guardada del cliente'}
+                        </span>
+                        {(locationPrecision === 'street' ||
+                          locationPrecision === 'colonia' ||
+                          locationPrecision === 'municipio') && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLocationPrecision('manual');
+                              setIsVerified(true);
+                            }}
+                            className="shrink-0 px-2 py-0.5 rounded bg-amber-100 border border-amber-300 text-amber-900 font-bold text-[10px] hover:bg-amber-200 transition-colors cursor-pointer"
+                          >
+                            Confirmar esta ubicación
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Contenedor del Mapa Leaflet Interactivo: h-40 en móvil, h-52 en sm */}
+                    <div className="relative w-full h-40 sm:h-52 bg-slate-100">
                       <div ref={mapContainerRef} className="w-full h-full z-0" />
                       {coordinates && (
                         <a
@@ -953,26 +1067,17 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
                   </div>
                 </>
               ) : (
-                <div className="sm:col-span-2 md:col-span-3 bg-emerald-50/70 border border-emerald-300 rounded-xl p-4 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
-                    <Navigation className="w-5 h-5 text-emerald-700" />
-                  </div>
-                  <div>
-                    <span className="text-xs font-extrabold text-emerald-950 block">
-                      Pedido para Recoger en Sucursal (Pickup)
-                    </span>
-                    <span className="text-[11px] text-emerald-800 block mt-0.5">
-                      No se requiere dirección ni geolocalización. El costo de envío se establece automáticamente en <strong>$0</strong>.
-                    </span>
-                  </div>
+                <div className="sm:col-span-2 md:col-span-3 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5 flex items-center gap-2 text-xs font-semibold text-emerald-900">
+                  <Navigation className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <span>Sin cargo de envío (recoger en sucursal)</span>
                 </div>
               )}
             </div>
           </section>
 
           {/* 2. Tacos, Gorditas y Tostadas */}
-          <section className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 sm:p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-200/60 pb-3">
+          <section className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 sm:p-4 space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-200/60 pb-2.5">
               <div>
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                   <UtensilsCrossed className="w-4 h-4 text-brand-red" />
@@ -983,23 +1088,24 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
                 </p>
               </div>
 
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleAddPreparedItem}
-                className="bg-white border-slate-300 hover:bg-slate-50 text-slate-700"
-              >
-                <Plus className="w-3.5 h-3.5 mr-1 text-brand-red" />
-                <span>Agregar Platillo</span>
-              </Button>
+              <div className="flex items-center gap-3">
+                {preparedItems.length === 0 && (
+                  <span className="text-xs text-slate-400">Sin platillos agregados</span>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddPreparedItem}
+                  className="bg-white border-slate-300 hover:bg-slate-50 text-slate-700"
+                >
+                  <Plus className="w-3.5 h-3.5 mr-1 text-brand-red" />
+                  <span>Agregar Platillo</span>
+                </Button>
+              </div>
             </div>
 
-            {preparedItems.length === 0 ? (
-              <div className="p-4 bg-white rounded-lg border border-dashed border-slate-300 text-center text-xs text-slate-400">
-                No hay tacos ni gorditas agregados. Haz clic en &ldquo;Agregar Platillo&rdquo; para ordenar piezas individuales.
-              </div>
-            ) : (
+            {preparedItems.length > 0 && (
               <div className="space-y-2.5">
                 {preparedItems.map((item, idx) => {
                   const isChile = item.guiso === 'chiles_rellenos';
@@ -1125,8 +1231,8 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
           </section>
 
           {/* 3. Barbacoa */}
-          <section className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 sm:p-5 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/60 pb-3">
+          <section className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 sm:p-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/60 pb-2.5">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                 <Flame className="w-4 h-4 text-brand-red" />
                 <span>Barbacoa ($480 / kg)</span>
@@ -1306,76 +1412,64 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
           </section>
 
           {/* 4. Menudo */}
-          <section className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 sm:p-5 space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5 border-b border-slate-200/60 pb-3">
+          <section className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 sm:p-4 space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5 border-b border-slate-200/60 pb-2.5">
               <Soup className="w-4 h-4 text-brand-red" />
               <span>Menudo</span>
             </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-white p-3.5 rounded-lg border border-slate-200 flex items-center justify-between">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="bg-white p-3 rounded-lg border border-slate-200 flex items-center justify-between">
                 <div>
                   <span className="text-xs font-bold text-slate-800 block">Medio Litro</span>
                   <span className="text-[11px] text-slate-500">${PRICES.menudoHalfLiter} c/u</span>
                 </div>
-                <select
+                <QtyStepper
                   value={menudoHalfLiterQty}
-                  onChange={(e) => setMenudoHalfLiterQty(Number(e.target.value))}
-                  className="bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-brand-red cursor-pointer"
-                >
-                  {[...Array(11).keys()].map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setMenudoHalfLiterQty}
+                  min={0}
+                  max={10}
+                  label="medio litro de menudo"
+                />
               </div>
 
-              <div className="bg-white p-3.5 rounded-lg border border-slate-200 flex items-center justify-between">
+              <div className="bg-white p-3 rounded-lg border border-slate-200 flex items-center justify-between">
                 <div>
                   <span className="text-xs font-bold text-slate-800 block">Litro</span>
                   <span className="text-[11px] text-slate-500">${PRICES.menudoLiter} c/u</span>
                 </div>
-                <select
+                <QtyStepper
                   value={menudoLiterQty}
-                  onChange={(e) => setMenudoLiterQty(Number(e.target.value))}
-                  className="bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-brand-red cursor-pointer"
-                >
-                  {[...Array(11).keys()].map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setMenudoLiterQty}
+                  min={0}
+                  max={10}
+                  label="litro de menudo"
+                />
               </div>
             </div>
           </section>
 
           {/* 5. Bebidas y Refrescos */}
-          <section className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 sm:p-5 space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5 border-b border-slate-200/60 pb-3">
+          <section className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 sm:p-4 space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5 border-b border-slate-200/60 pb-2.5">
               <Coffee className="w-4 h-4 text-brand-red" />
               <span>Bebidas</span>
             </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-white p-3.5 rounded-lg border border-slate-200 flex items-center justify-between">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="bg-white p-3 rounded-lg border border-slate-200 flex items-center justify-between">
                 <div>
                   <span className="text-xs font-bold text-slate-800 block">Coca-Cola</span>
                   <span className="text-[11px] text-slate-500">${PRICES.cocaCola} c/u</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <select
+                  <QtyStepper
                     value={cocaColaQty}
-                    onChange={(e) => setCocaColaQty(Number(e.target.value))}
-                    className="bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-brand-red cursor-pointer"
-                  >
-                    {[...Array(21).keys()].map((n) => (
-                      <option key={n} value={n}>
-                        {n}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setCocaColaQty}
+                    min={0}
+                    max={20}
+                    label="Coca-Cola"
+                  />
                   <span className="text-xs font-extrabold text-slate-900 w-12 text-right">
                     ${cocaColaQty * PRICES.cocaCola}
                   </span>
@@ -1385,61 +1479,53 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
           </section>
 
           {/* 6. Complementos y Tortillas */}
-          <section className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 sm:p-5 space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5 border-b border-slate-200/60 pb-3">
+          <section className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 sm:p-4 space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5 border-b border-slate-200/60 pb-2.5">
               <PlusCircle className="w-4 h-4 text-brand-red" />
               <span>Complementos y Tortillas</span>
             </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="bg-white p-3 rounded-lg border border-slate-200 flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-bold text-slate-800 block">Salsa Roja</span>
+            {/* Fila única compacta de 3 steppers para salsas y cebolla */}
+            <div className="bg-white p-3 rounded-lg border border-slate-200">
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="flex flex-col items-center gap-1">
+                  <span className="text-xs font-bold text-slate-800">Salsa Roja</span>
                   <span className="text-[10px] text-slate-500">${PRICES.salsa} c/pza</span>
+                  <QtyStepper
+                    value={salsaRedQty}
+                    onChange={setSalsaRedQty}
+                    min={0}
+                    max={20}
+                    label="salsa roja"
+                  />
                 </div>
-                <input
-                  type="number"
-                  min="0"
-                  max="20"
-                  value={salsaRedQty}
-                  onChange={(e) => setSalsaRedQty(Number(e.target.value) || 0)}
-                  className="w-14 px-2 py-1 bg-slate-50 border border-slate-300 rounded-md text-xs font-bold text-center"
-                />
-              </div>
-
-              <div className="bg-white p-3 rounded-lg border border-slate-200 flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-bold text-slate-800 block">Salsa Verde</span>
+                <div className="flex flex-col items-center gap-1">
+                  <span className="text-xs font-bold text-slate-800">Salsa Verde</span>
                   <span className="text-[10px] text-slate-500">${PRICES.salsa} c/pza</span>
+                  <QtyStepper
+                    value={salsaGreenQty}
+                    onChange={setSalsaGreenQty}
+                    min={0}
+                    max={20}
+                    label="salsa verde"
+                  />
                 </div>
-                <input
-                  type="number"
-                  min="0"
-                  max="20"
-                  value={salsaGreenQty}
-                  onChange={(e) => setSalsaGreenQty(Number(e.target.value) || 0)}
-                  className="w-14 px-2 py-1 bg-slate-50 border border-slate-300 rounded-md text-xs font-bold text-center"
-                />
-              </div>
-
-              <div className="bg-white p-3 rounded-lg border border-slate-200 flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-bold text-slate-800 block">Cebolla</span>
+                <div className="flex flex-col items-center gap-1">
+                  <span className="text-xs font-bold text-slate-800">Cebolla</span>
                   <span className="text-[10px] text-slate-500">${PRICES.onion} c/pza</span>
+                  <QtyStepper
+                    value={onionQty}
+                    onChange={setOnionQty}
+                    min={0}
+                    max={20}
+                    label="cebolla"
+                  />
                 </div>
-                <input
-                  type="number"
-                  min="0"
-                  max="20"
-                  value={onionQty}
-                  onChange={(e) => setOnionQty(Number(e.target.value) || 0)}
-                  className="w-14 px-2 py-1 bg-slate-50 border border-slate-300 rounded-md text-xs font-bold text-center"
-                />
               </div>
             </div>
 
-            {/* Tortillas: Paquetes */}
-            <div className="bg-white p-3.5 rounded-lg border border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+            {/* Tortillas: Paquetes con stepper */}
+            <div className="bg-white p-3 rounded-lg border border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
               <div>
                 <span className="font-bold text-slate-800 block">Paquetes de Tortillas</span>
                 <span className="text-[11px] text-slate-500">
@@ -1448,15 +1534,14 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
               </div>
 
               <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1">
-                  <label className="text-slate-500">Paquetes:</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="20"
+                <div className="flex items-center gap-1.5">
+                  <label className="text-slate-500 text-xs">Paquetes:</label>
+                  <QtyStepper
                     value={tortillasPkgQty}
-                    onChange={(e) => setTortillasPkgQty(Number(e.target.value) || 1)}
-                    className="w-12 px-2 py-1 bg-slate-50 border border-slate-300 rounded-md text-center font-bold"
+                    onChange={(v) => setTortillasPkgQty(Math.max(1, v))}
+                    min={1}
+                    max={20}
+                    label="paquetes de tortillas"
                   />
                 </div>
 
@@ -1480,23 +1565,25 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
           </section>
 
           {/* 7. Envío y Notas */}
-          <section className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 sm:p-5 space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="sm:col-span-1">
-                <Input
-                  id="shipping-fee"
-                  name="shippingFee"
-                  label="Tarifa de Envío ($)"
-                  type="number"
-                  min="0"
-                  step="5"
-                  value={shippingFee}
-                  onChange={(e) => setShippingFee(Number(e.target.value) || 0)}
-                  icon={Truck}
-                />
-              </div>
+          <section className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 sm:p-4 space-y-3">
+            <div className={`grid grid-cols-1 ${deliveryType === 'recoger' ? '' : 'sm:grid-cols-3'} gap-3`}>
+              {deliveryType !== 'recoger' && (
+                <div className="sm:col-span-1">
+                  <Input
+                    id="shipping-fee"
+                    name="shippingFee"
+                    label="Tarifa de Envío ($)"
+                    type="number"
+                    min="0"
+                    step="5"
+                    value={shippingFee}
+                    onChange={(e) => setShippingFee(Number(e.target.value) || 0)}
+                    icon={Truck}
+                  />
+                </div>
+              )}
 
-              <div className="sm:col-span-2">
+              <div className={deliveryType === 'recoger' ? 'w-full' : 'sm:col-span-2'}>
                 <Input
                   id="order-notes"
                   name="notes"
@@ -1512,8 +1599,8 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
           </section>
 
           {/* 8. Método de Pago */}
-          <section className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 sm:p-5 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/60 pb-3">
+          <section className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 sm:p-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/60 pb-2.5">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                 <CreditCard className="w-4 h-4 text-brand-red" />
                 <span>Método de Pago</span>
@@ -1523,7 +1610,7 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
                 <button
                   type="button"
                   onClick={() => setPaymentMethod(PAYMENT_METHODS.EFECTIVO)}
-                  className={`px-3 py-1 rounded-md font-semibold transition-all flex items-center gap-1 ${
+                  className={`px-3 py-1 rounded-md font-semibold transition-all flex items-center gap-1 cursor-pointer ${
                     paymentMethod === PAYMENT_METHODS.EFECTIVO
                       ? 'bg-brand-red text-white shadow-2xs'
                       : 'text-slate-600 hover:text-slate-900'
@@ -1535,7 +1622,7 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
                 <button
                   type="button"
                   onClick={() => setPaymentMethod(PAYMENT_METHODS.TRANSFERENCIA)}
-                  className={`px-3 py-1 rounded-md font-semibold transition-all flex items-center gap-1 ${
+                  className={`px-3 py-1 rounded-md font-semibold transition-all flex items-center gap-1 cursor-pointer ${
                     paymentMethod === PAYMENT_METHODS.TRANSFERENCIA
                       ? 'bg-brand-red text-white shadow-2xs'
                       : 'text-slate-600 hover:text-slate-900'
@@ -1548,13 +1635,13 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
             </div>
 
             {paymentMethod === PAYMENT_METHODS.EFECTIVO ? (
-              <div className="bg-white p-4 rounded-lg border border-slate-200 space-y-3">
+              <div className="bg-white p-3 sm:p-4 rounded-lg border border-slate-200 space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
                   <div>
                     <label className="text-xs font-bold text-slate-700 block mb-1">
                       ¿Con cuánto pagará el cliente? ($)
                     </label>
-                    <div className="relative">
+                    <div className="relative mb-2">
                       <span className="absolute left-3 top-2 text-slate-400 font-bold text-xs">$</span>
                       <input
                         type="number"
@@ -1565,6 +1652,26 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
                         placeholder="Ej. 500"
                         className="w-full pl-7 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold focus:outline-none focus:ring-1 focus:ring-brand-red"
                       />
+                    </div>
+                    {/* Botones rápidos */}
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setAmountPaid(String(calculations.total))}
+                        className="px-2.5 py-1 rounded-lg border border-slate-300 bg-slate-50 text-xs font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                      >
+                        Exacto
+                      </button>
+                      {[100, 200, 500].map((amt) => (
+                        <button
+                          key={amt}
+                          type="button"
+                          onClick={() => setAmountPaid(String(amt))}
+                          className="px-2.5 py-1 rounded-lg border border-slate-300 bg-slate-50 text-xs font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                        >
+                          ${amt}
+                        </button>
+                      ))}
                     </div>
                   </div>
 
@@ -1594,7 +1701,7 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
                 </div>
               </div>
             ) : (
-              <div className="bg-white p-4 rounded-lg border border-slate-200 flex items-center justify-between">
+              <div className="bg-white p-3.5 rounded-lg border border-slate-200 flex items-center justify-between">
                 <div>
                   <span className="text-xs font-bold text-slate-800 block">
                     Estado de la Transferencia
@@ -1619,32 +1726,32 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
               </div>
             )}
           </section>
+        </div>{/* Fin del área scrollable de secciones */}
 
-          {/* 9. Resumen Financiero en Vivo */}
-          <div className="bg-slate-900 text-white rounded-xl p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4">
-            <div className="space-y-1 text-xs">
+        {/* Pie Fijo: Resumen Financiero + Botones de Acción */}
+        <div className="shrink-0 border-t border-slate-200 bg-slate-900 text-white px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-4 text-xs">
+            <div className="space-y-0.5">
               <div className="text-slate-300 flex items-center gap-2">
-                <span>Subtotal productos:</span>
+                <span>Subtotal:</span>
                 <span className="font-bold text-white">${calculations.subtotal}</span>
               </div>
               <div className="text-slate-300 flex items-center gap-2">
-                <span>Cargo por envío:</span>
+                <span>Envío:</span>
                 <span className="font-bold text-white">${calculations.fee}</span>
               </div>
             </div>
-
-            <div className="text-right">
+            <div className="border-l border-slate-700 pl-4">
               <span className="text-[10px] font-bold text-brand-yellow uppercase tracking-wider block">
                 Total a Cobrar
               </span>
-              <span className="text-2xl sm:text-3xl font-black text-white">
+              <span className="text-xl sm:text-2xl font-black text-white">
                 ${calculations.total}
               </span>
             </div>
           </div>
 
-          {/* Botones de Acción */}
-          <div className="flex items-center justify-end gap-3 pt-2">
+          <div className="flex items-center gap-2.5">
             <Button type="button" variant="outline" size="md" onClick={onClose}>
               Cancelar
             </Button>
@@ -1659,10 +1766,11 @@ const OrderFormModal = ({ onClose, onSubmitSuccess }) => {
               <span>Guardar y Levantar Pedido</span>
             </Button>
           </div>
-        </form>
-      </div>
+        </div>
+      </form>
     </div>
-  );
+  </div>
+);
 };
 
 export default OrderFormModal;
