@@ -3,6 +3,7 @@
  * @description Controlador HTTP para endpoints de cliente, tarifas por colonia y geocodificación.
  */
 import * as ClientService from '../services/ClientService.js';
+import { cleanCalle, cleanColonia } from '../services/GeocodingService.js';
 import { sendSuccess, sendError } from '../utils/responseHelper.js';
 
 /**
@@ -44,6 +45,25 @@ export const getColoniaShipping = async (req, res) => {
 export const geocodeAddress = async (req, res) => {
   try {
     const { street, number, colonia, municipio, crossStreets } = req.query;
+
+    const fields = { street, number, colonia, municipio, crossStreets };
+    for (const [key, value] of Object.entries(fields)) {
+      if (value !== undefined && value !== null) {
+        if (typeof value !== 'string' || value.length > 120) {
+          return sendError(res, 400, `El campo ${key} debe ser una cadena de texto de máximo 120 caracteres`);
+        }
+      }
+    }
+
+    const cStreet = cleanCalle(street);
+    const cColonia = cleanColonia(colonia);
+    const hasStreet = Boolean(cStreet && !/^(?:s\/c|sin calle)$/i.test(cStreet));
+    const hasColonia = Boolean(cColonia);
+
+    if (!hasStreet && !hasColonia) {
+      return sendError(res, 400, 'Ingresa al menos la calle o la colonia');
+    }
+
     const coords = await ClientService.geocodeClientAddress({
       street,
       number,
@@ -53,6 +73,7 @@ export const geocodeAddress = async (req, res) => {
     });
     return sendSuccess(res, 200, 'Coordenadas geocodificadas con éxito', coords);
   } catch (error) {
-    return sendError(res, 500, error.message);
+    console.error('[ClientController.geocodeAddress] Error:', error.message);
+    return sendError(res, 500, 'No se pudo geocodificar la dirección');
   }
 };
