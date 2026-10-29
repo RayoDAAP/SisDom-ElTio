@@ -14,7 +14,8 @@ export const listUsers = async (req, res) => {
     const users = await UserService.listUsers();
     return sendSuccess(res, 200, 'Lista de usuarios obtenida', { users });
   } catch (error) {
-    return sendError(res, 500, error.message);
+    console.error('[UserController.listUsers] Error:', error);
+    return sendError(res, 500, 'Error interno del servidor');
   }
 };
 
@@ -80,6 +81,7 @@ export const listActiveDrivers = async (req, res) => {
     const drivers = await UserService.listActiveDrivers();
     return sendSuccess(res, 200, 'Repartidores activos obtenidos', { drivers });
   } catch (error) {
-    return sendError(res, 500, error.message);
+    console.error('[UserController.listActiveDrivers] Error:', error);
+    return sendError(res, 500, 'Error interno del servidor');
   }
 };

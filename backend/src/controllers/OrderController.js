@@ -14,7 +14,8 @@ export const getOrders = async (req, res) => {
     const orders = await OrderService.getOrders(range, req.user);
     return sendSuccess(res, 200, 'Lista de pedidos obtenida', { orders });
   } catch (error) {
-    return sendError(res, 500, error.message);
+    console.error('[OrderController.getOrders] Error:', error);
+    return sendError(res, 500, 'Error interno del servidor');
   }
 };
 
@@ -29,7 +30,8 @@ export const getOrderById = async (req, res) => {
     }
     return sendSuccess(res, 200, 'Detalle del pedido', { order });
   } catch (error) {
-    return sendError(res, 500, error.message);
+    console.error('[OrderController.getOrderById] Error:', error);
+    return sendError(res, 500, 'Error interno del servidor');
   }
 };
 
@@ -135,6 +137,7 @@ export const getDriverRoute = async (req, res) => {
     const route = await OrderService.getDriverRoute(driverId);
     return sendSuccess(res, 200, 'Ruta optimizada calculada con éxito', { route });
   } catch (error) {
-    return sendError(res, 500, error.message);
+    console.error('[OrderController.getDriverRoute] Error:', error);
+    return sendError(res, 500, 'Error interno del servidor');
   }
 };

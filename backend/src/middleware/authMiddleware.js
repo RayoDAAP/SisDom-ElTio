@@ -3,15 +3,16 @@
  * @description Middleware de autenticación y autorización por roles.
  */
 import * as AuthService from '../services/AuthService.js';
+import { findUserById } from '../models/User.js';
 import { sendError } from '../utils/responseHelper.js';
 
 /**
  * Verifica que la petición incluya un Bearer Token JWT válido.
- * Inyecta `req.user` con el payload decodificado si es válido.
+ * Inyecta `req.user` con el payload decodificado si es válido y la cuenta está activa.
  *
  * @type {import('express').RequestHandler}
  */
-export const authenticate = (req, res, next) => {
+export const authenticate = async (req, res, next) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -20,12 +21,22 @@ export const authenticate = (req, res, next) => {
 
   const token = authHeader.split(' ')[1];
 
+  let decoded;
   try {
-    const decoded = AuthService.verifyToken(token);
-    req.user = decoded;
-    next();
+    decoded = AuthService.verifyToken(token);
   } catch {
     return sendError(res, 401, 'Token inválido o expirado');
+  }
+
+  try {
+    const usuario = await findUserById(decoded.id);
+    if (!usuario || !usuario.isActive) {
+      return sendError(res, 401, 'Sesión inválida');
+    }
+    req.user = { ...decoded, role: usuario.role };
+    next();
+  } catch {
+    return sendError(res, 401, 'Sesión inválida');
   }
 };
 

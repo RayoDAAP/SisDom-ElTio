@@ -35,8 +35,8 @@ export const createUser = async ({ name, username, password, role }) => {
     throw new Error('El nombre de usuario es requerido');
   }
 
-  if (!password || password.length < 4) {
-    throw new Error('La contraseña debe tener al menos 4 caracteres');
+  if (!password || password.length < 8) {
+    throw new Error('La contraseña debe tener al menos 8 caracteres');
   }
 
   const validRoles = [USER_ROLES.ADMIN, USER_ROLES.AUXILIAR, USER_ROLES.REPARTIDOR];
@@ -65,8 +65,8 @@ export const createUser = async ({ name, username, password, role }) => {
  * @returns {Promise<boolean>}
  */
 export const changePassword = async (userId, newPassword) => {
-  if (!newPassword || newPassword.length < 4) {
-    throw new Error('La nueva contraseña debe tener al menos 4 caracteres');
+  if (!newPassword || newPassword.length < 8) {
+    throw new Error('La contraseña debe tener al menos 8 caracteres');
   }
 
   const user = await findUserById(userId);

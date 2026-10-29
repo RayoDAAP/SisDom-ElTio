@@ -18,7 +18,8 @@ export const searchClient = async (req, res) => {
     const client = await ClientService.searchClientByPhone(phone);
     return sendSuccess(res, 200, 'Resultado de búsqueda de cliente', { client });
   } catch (error) {
-    return sendError(res, 500, error.message);
+    console.error('[ClientController.searchClient] Error:', error);
+    return sendError(res, 500, 'Error interno del servidor');
   }
 };
 
@@ -34,7 +35,8 @@ export const getColoniaShipping = async (req, res) => {
     const data = await ClientService.fetchShippingFee(colonia);
     return sendSuccess(res, 200, 'Tarifa de colonia obtenida', data);
   } catch (error) {
-    return sendError(res, 500, error.message);
+    console.error('[ClientController.getColoniaShipping] Error:', error);
+    return sendError(res, 500, 'Error interno del servidor');
   }
 };
 

@@ -44,6 +44,8 @@ export const toPublicUser = (user) => {
   return publicUser;
 };
 
+const escapeLike = (s) => s.replace(/[\\%_]/g, '\\$&');
+
 /**
  * Busca un usuario por nombre de usuario (o email como alternativa).
  * @param {string} identifier
@@ -52,15 +54,31 @@ export const toPublicUser = (user) => {
 export const findUserByUsername = async (identifier) => {
   if (!identifier) return null;
   const clean = identifier.trim().toLowerCase();
+  const patron = escapeLike(clean);
 
-  const { data, error } = await supabase
+  const { data: userByUsername, error: errUsername } = await supabase
     .from('users')
     .select('*')
-    .or(`username.ilike.${clean},email.ilike.${clean}`)
+    .ilike('username', patron)
+    .limit(1)
     .maybeSingle();
 
-  if (error || !data) return null;
-  return mapUserFromDB(data);
+  if (!errUsername && userByUsername) {
+    return mapUserFromDB(userByUsername);
+  }
+
+  const { data: userByEmail, error: errEmail } = await supabase
+    .from('users')
+    .select('*')
+    .ilike('email', patron)
+    .limit(1)
+    .maybeSingle();
+
+  if (!errEmail && userByEmail) {
+    return mapUserFromDB(userByEmail);
+  }
+
+  return null;
 };
 
 /**
