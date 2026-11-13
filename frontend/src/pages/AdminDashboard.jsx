@@ -31,6 +31,7 @@ import {
   Banknote,
   ChevronDown,
   ChevronRight,
+  Bike,
 } from 'lucide-react';
 import useAuth from '../hooks/useAuth';
 import Logo from '../components/common/Logo';
@@ -39,6 +40,7 @@ import OrderDetailModal from '../components/orders/OrderDetailModal';
 import OrderFormModal from '../components/orders/OrderFormModal';
 import AnalyticsView from '../components/admin/AnalyticsView';
 import AccountsView from '../components/admin/AccountsView';
+import DriverTrackingView from '../components/admin/DriverTrackingView';
 import {
   fetchOrders,
   createOrderRequest,
