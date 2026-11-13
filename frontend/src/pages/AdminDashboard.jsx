@@ -342,6 +342,18 @@ const AdminDashboard = () => {
             </button>
 
             <button
+              onClick={() => setActiveTab('tracking')}
+              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold transition-all border-b-2 ${
+                activeTab === 'tracking'
+                  ? 'border-brand-yellow text-brand-yellow bg-white/10'
+                  : 'border-transparent text-white/80 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Bike className="w-4 h-4" />
+              <span>Mapa Repartidores</span>
+            </button>
+
+            <button
               onClick={() => setActiveTab('accounts')}
               className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold transition-all border-b-2 ${
                 activeTab === 'accounts'
@@ -812,7 +824,16 @@ const AdminDashboard = () => {
         {/* VISTA 2: MÉTRICAS Y ANALÍTICA */}
         {activeTab === 'analytics' && <AnalyticsView orders={orders} />}
 
-        {/* VISTA 3: CONTROL DE CUENTAS */}
+        {/* VISTA 3: MAPA DE REPARTIDORES EN VIVO */}
+        {activeTab === 'tracking' && (
+          <DriverTrackingView
+            drivers={activeDrivers}
+            orders={orders}
+            onSelectOrder={(ord) => setSelectedOrder(ord)}
+          />
+        )}
+
+        {/* VISTA 4: CONTROL DE CUENTAS */}
         {activeTab === 'accounts' && <AccountsView />}
       </main>
 
