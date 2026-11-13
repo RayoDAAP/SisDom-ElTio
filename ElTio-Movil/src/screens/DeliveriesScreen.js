@@ -86,6 +86,8 @@ export const DeliveriesScreen = () => {
     locationService.requestPermissions().then((granted) => {
       if (!granted) return;
 
+      console.log('[GPS Repartidor] Permiso otorgado. Transmitiendo GPS cada 10s...');
+
       const transmitLocation = async () => {
         try {
           const status = await locationService.getStatus(token);
@@ -93,10 +95,16 @@ export const DeliveriesScreen = () => {
 
           if (status?.isTrackingEnabled !== false) {
             const pos = await locationService.getCurrentPosition();
-            await locationService.sendLocation(token, pos);
+            console.log('[GPS Repartidor] Transmitiendo coordenadas: lat=' + pos.lat + ', lng=' + pos.lng);
+            const res = await locationService.sendLocation(token, pos);
+            if (res?.success) {
+              console.log('[GPS Repartidor] Ubicacion en vivo sincronizada con exito');
+            }
+          } else {
+            console.log('[GPS Repartidor] Ubicacion en pausa (aprobada por admin)');
           }
-        } catch {
-          // Ignorar fallas temporales de red en movimiento
+        } catch (err) {
+          console.log('[GPS Repartidor] Advertencia al transmitir:', err.message);
         }
       };
 

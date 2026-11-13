@@ -94,7 +94,7 @@ export const turnOnTracking = async (req, res) => {
  */
 export const listAllDriverTracking = async (req, res) => {
   try {
-    const locations = getAllDriverLocations();
+    const locations = await getAllDriverLocations();
     return sendSuccess(res, 200, 'Ubicaciones de repartidores obtenidas', { locations });
   } catch (error) {
     console.error('[DriverTracking.listAllDriverTracking] Error:', error);
@@ -110,7 +110,7 @@ export const handleApproveRequest = async (req, res) => {
   try {
     const { id } = req.params;
     const { approved } = req.body; // boolean
-    const updated = resolveTrackingRequest(id, approved !== false);
+    const updated = await resolveTrackingRequest(id, approved !== false);
     return sendSuccess(
       res,
       200,
