@@ -10,6 +10,7 @@ import authRoutes from './routes/authRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 import clientRoutes from './routes/clientRoutes.js';
 import userRoutes from './routes/userRoutes.js';
+import trackingRoutes from './routes/trackingRoutes.js';
 import { sendError } from './utils/responseHelper.js';
 
 const app = express();
@@ -90,6 +91,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api', clientRoutes);
+app.use('/api/tracking', trackingRoutes);
 
 // ─── Ruta no encontrada ──────────────────────────────────────────────────────
 

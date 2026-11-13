@@ -35,6 +35,8 @@ import { OrderCard } from '../components/orders/OrderCard';
 import { DriverMetricsCard } from '../components/orders/DriverMetricsCard';
 import { OrderDetailModal } from '../components/orders/OrderDetailModal';
 import { orderService } from '../services/orderService';
+import { locationService } from '../services/locationService';
+import { GpsControlModal } from '../components/common/GpsControlModal';
 import { useAuth } from '../context/AuthContext';
 import { ORDER_STATUS } from '../models/order.model';
 
@@ -71,6 +73,42 @@ export const DeliveriesScreen = () => {
   const [missingTargetOrder, setMissingTargetOrder] = useState(null);
   const [missingNote, setMissingNote] = useState('');
   const [submittingMissing, setSubmittingMissing] = useState(false);
+
+  // Estado del GPS del repartidor y modal de control
+  const [gpsModalVisible, setGpsModalVisible] = useState(false);
+  const [trackingStatus, setTrackingStatus] = useState(null);
+
+  // Solicitar permisos y comenzar a transmitir coordenadas GPS cada 10 segundos
+  useEffect(() => {
+    if (!token) return;
+
+    let isMounted = true;
+    locationService.requestPermissions().then((granted) => {
+      if (!granted) return;
+
+      const transmitLocation = async () => {
+        try {
+          const status = await locationService.getStatus(token);
+          if (isMounted) setTrackingStatus(status);
+
+          if (status?.isTrackingEnabled !== false) {
+            const pos = await locationService.getCurrentPosition();
+            await locationService.sendLocation(token, pos);
+          }
+        } catch {
+          // Ignorar fallas temporales de red en movimiento
+        }
+      };
+
+      transmitLocation();
+      const interval = setInterval(transmitLocation, 10000);
+      return () => clearInterval(interval);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [token]);
 
   const loadDeliveries = useCallback(async () => {
     if (!token) return;
@@ -200,7 +238,7 @@ export const DeliveriesScreen = () => {
   return (
     <View style={styles.container}>
       {/* Encabezado Principal */}
-      <Header />
+      <Header trackingStatus={trackingStatus} onOpenGpsModal={() => setGpsModalVisible(true)} />
 
       {/* Tarjeta de Métricas del Día para el Repartidor */}
       <DriverMetricsCard orders={orders} />
@@ -317,6 +355,15 @@ export const DeliveriesScreen = () => {
           isUpdating={updatingOrderId === selectedOrder.id}
         />
       )}
+
+      {/* Modal de Control de Ubicación GPS */}
+      <GpsControlModal
+        visible={gpsModalVisible}
+        onClose={() => setGpsModalVisible(false)}
+        token={token}
+        trackingStatus={trackingStatus}
+        onStatusUpdated={(newStatus) => setTrackingStatus(newStatus)}
+      />
 
       {/* Modal Interactivo para Reportar Faltante en Pedido */}
       <Modal

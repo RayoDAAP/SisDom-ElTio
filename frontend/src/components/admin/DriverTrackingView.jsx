@@ -2,6 +2,8 @@
  * @module DriverTrackingView
  * @description Vista interactiva de monitoreo GPS en tiempo real para repartidores.
  *              - Selector por pestañas (un tab por cada repartidor activo o con pedidos en ruta).
+ *              - Muestra la ubicación real transmitida desde el celular del repartidor.
+ *              - Tarjeta y alerta interactiva si el repartidor solicita apagar su ubicación (con botones Aprobar / Denegar).
  *              - Marcador especial de la sucursal de Tacos El Tío (base de salida).
  *              - Marcador del repartidor con icono de motito y pulso animado.
  *              - Marcadores numerados con los pedidos asignados/en ruta con sus estados.
@@ -23,7 +25,15 @@ import {
   Navigation,
   ChevronRight,
   UserCheck,
+  ShieldAlert,
+  Power,
+  Check,
+  X,
 } from 'lucide-react';
+import {
+  fetchDriverLocations,
+  resolveDriverTrackingRequest,
+} from '../../services/trackingService';
 
 // Coordenadas base de la sucursal de Tacos El Tío (San Nicolás de los Garza)
 const BRANCH_LOCATION = {
@@ -39,28 +49,33 @@ export default function DriverTrackingView({
   orders = [],
   onSelectOrder,
 }) {
-  // Pestaña del repartidor seleccionado (por id)
   const [selectedDriverId, setSelectedDriverId] = useState(null);
+  const [realLocations, setRealLocations] = useState([]);
+  const [resolvingId, setResolvingId] = useState(null);
 
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const layerGroupRef = useRef(null);
 
-  // Filtrar pedidos activos o del turno de entrega
-  const activeOrders = useMemo(() => {
-    return orders.filter(
-      (o) =>
-        o.status === 'en_camino' ||
-        o.status === 'asignado' ||
-        o.status === 'incompleto' ||
-        o.status === 'listo'
-    );
-  }, [orders]);
+  // Consultar en vivo las ubicaciones y solicitudes de los celulares cada 3.5 segundos
+  useEffect(() => {
+    const updateLocations = async () => {
+      try {
+        const data = await fetchDriverLocations();
+        setRealLocations(data);
+      } catch (err) {
+        // Silencioso si no hay conexión
+      }
+    };
 
-  // Lista de repartidores disponibles (activos o que tienen pedidos asignados)
+    updateLocations();
+    const interval = setInterval(updateLocations, 3500);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Lista de repartidores disponibles
   const driversList = useMemo(() => {
     const list = [...drivers];
-    // Asegurar que si hay pedidos asignados a un chofer no registrado en 'drivers', aparezca
     orders.forEach((o) => {
       if (o.assignedTo && !list.some((d) => String(d.id) === String(o.assignedTo))) {
         list.push({
@@ -74,7 +89,7 @@ export default function DriverTrackingView({
     return list;
   }, [drivers, orders]);
 
-  // Seleccionar automáticamente el primer repartidor si ninguno está seleccionado
+  // Seleccionar automáticamente el primer repartidor
   useEffect(() => {
     if (driversList.length > 0) {
       if (!selectedDriverId || !driversList.some((d) => String(d.id) === String(selectedDriverId))) {
@@ -83,10 +98,20 @@ export default function DriverTrackingView({
     }
   }, [driversList, selectedDriverId]);
 
-  // Datos del repartidor actualmente seleccionado
   const currentDriver = useMemo(() => {
     return driversList.find((d) => String(d.id) === String(selectedDriverId)) || null;
   }, [driversList, selectedDriverId]);
+
+  // Datos de GPS reportados por el celular del repartidor seleccionado
+  const currentDriverGPS = useMemo(() => {
+    if (!selectedDriverId) return null;
+    return realLocations.find((l) => String(l.driverId) === String(selectedDriverId)) || null;
+  }, [realLocations, selectedDriverId]);
+
+  // Solicitudes pendientes de apagado de ubicación de todos los repartidores
+  const pendingTurnOffRequests = useMemo(() => {
+    return realLocations.filter((l) => l.requestPending);
+  }, [realLocations]);
 
   // Pedidos asignados al repartidor seleccionado
   const driverOrders = useMemo(() => {
@@ -96,26 +121,55 @@ export default function DriverTrackingView({
       .filter((o) => o.status !== 'cancelado');
   }, [orders, selectedDriverId]);
 
-  // Pedidos activos (en camino / asignados / faltantes)
   const pendingDeliveries = useMemo(() => {
     return driverOrders.filter(
       (o) => o.status === 'en_camino' || o.status === 'asignado' || o.status === 'incompleto'
     );
   }, [driverOrders]);
 
-  // Pedidos completados
   const deliveredCount = useMemo(() => {
     return driverOrders.filter((o) => o.status === 'entregado').length;
   }, [driverOrders]);
 
-  // Calcular la posición estimada/en vivo del repartidor
-  // Si está en ruta y tiene pedidos en camino, se ubica entre la sucursal y la primera parada
+  // Posición del repartidor para el mapa
   const driverLivePosition = useMemo(() => {
-    if (pendingDeliveries.length === 0) {
-      // Si no tiene entregas pendientes, se encuentra en la sucursal esperando pedidos
+    // 1. Si el celular ha reportado coordenadas GPS reales y no está apagado
+    if (
+      currentDriverGPS &&
+      currentDriverGPS.lat &&
+      currentDriverGPS.lng &&
+      currentDriverGPS.isTrackingEnabled !== false
+    ) {
+      const minutesAgo = Math.round(
+        (Date.now() - new Date(currentDriverGPS.updatedAt).getTime()) / 60000
+      );
+      return {
+        lat: Number(currentDriverGPS.lat),
+        lng: negLng(Number(currentDriverGPS.lng)),
+        isRealGPS: true,
+        isAtBranch: false,
+        headingLabel: minutesAgo <= 1 ? 'GPS Celular (En vivo)' : `GPS Celular hace ${minutesAgo}m`,
+      };
+    }
+
+    // 2. Si la ubicación fue apagada por autorización del admin
+    if (currentDriverGPS && currentDriverGPS.isTrackingEnabled === false) {
       return {
         lat: BRANCH_LOCATION.lat,
         lng: BRANCH_LOCATION.lng,
+        isRealGPS: false,
+        isAtBranch: true,
+        isDisabled: true,
+        headingLabel: 'Ubicación GPS apagada (Aprobado)',
+      };
+    }
+
+    // 3. Fallback inteligente mientras el celular se conecta
+    if (pendingDeliveries.length === 0) {
+      return {
+        lat: BRANCH_LOCATION.lat,
+        lng: BRANCH_LOCATION.lng,
+        isRealGPS: false,
         isAtBranch: true,
         headingLabel: 'En sucursal (Disponible)',
       };
@@ -128,26 +182,40 @@ export default function DriverTrackingView({
     if (firstActiveWithCoords) {
       const targetLat = Number(firstActiveWithCoords.client.lat);
       const targetLng = negLng(Number(firstActiveWithCoords.client.lng));
-      // Interpolar avance (~45% del trayecto hacia el primer destino para simular movimiento en vivo)
       const interpLat = BRANCH_LOCATION.lat + (targetLat - BRANCH_LOCATION.lat) * 0.45;
       const interpLng = BRANCH_LOCATION.lng + (targetLng - BRANCH_LOCATION.lng) * 0.45;
 
       return {
         lat: Number(interpLat.toFixed(6)),
         lng: Number(interpLng.toFixed(6)),
+        isRealGPS: false,
         isAtBranch: false,
         headingLabel: `En camino a: ${firstActiveWithCoords.client?.name || 'Cliente'}`,
-        targetOrder: firstActiveWithCoords,
       };
     }
 
     return {
       lat: BRANCH_LOCATION.lat,
       lng: BRANCH_LOCATION.lng,
+      isRealGPS: false,
       isAtBranch: true,
       headingLabel: 'En ruta',
     };
-  }, [pendingDeliveries]);
+  }, [currentDriverGPS, pendingDeliveries]);
+
+  // Resolver solicitud de apagado desde la alerta de admin
+  const handleResolveRequest = async (driverId, approved) => {
+    setResolvingId(driverId);
+    try {
+      await resolveDriverTrackingRequest(driverId, approved);
+      const updated = await fetchDriverLocations();
+      setRealLocations(updated);
+    } catch (err) {
+      console.error('Error al resolver solicitud:', err);
+    } finally {
+      setResolvingId(null);
+    }
+  };
 
   // Inicializar mapa Leaflet una sola vez
   useEffect(() => {
@@ -180,24 +248,22 @@ export default function DriverTrackingView({
     };
   }, []);
 
-  // Dibujar y actualizar marcadores, motito y ruta cuando cambia de chofer o de pedidos
+  // Dibujar y actualizar marcadores, motito y paradas
   useEffect(() => {
     const map = mapInstanceRef.current;
     const layerGroup = layerGroupRef.current;
     if (!map || !layerGroup) return;
 
     layerGroup.clearLayers();
-
     const boundsPoints = [];
 
-    // 1. Marcador de la Sucursal (Base)
-    const branchIconHtml = `
-      <div style="background-color: #CC0000; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 3px solid #ffffff; box-shadow: 0 4px 10px rgba(0,0,0,0.3); font-size: 18px;">
-        🌮
-      </div>
-    `;
+    // 1. Sucursal Tacos El Tío
     const branchIcon = L.divIcon({
-      html: branchIconHtml,
+      html: `
+        <div style="background-color: #CC0000; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 3px solid #ffffff; box-shadow: 0 4px 10px rgba(0,0,0,0.3); font-size: 18px;">
+          🌮
+        </div>
+      `,
       className: 'custom-branch-marker',
       iconSize: [36, 36],
       iconAnchor: [18, 18],
@@ -213,18 +279,21 @@ export default function DriverTrackingView({
     layerGroup.addLayer(branchMarker);
     boundsPoints.push([BRANCH_LOCATION.lat, BRANCH_LOCATION.lng]);
 
-    // 2. Marcador del Repartidor (Motito en vivo con pulso animado)
+    // 2. Marcador del Repartidor (Motito)
     if (driverLivePosition) {
-      const bikeIconHtml = `
-        <div style="position: relative; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;">
-          <div style="position: absolute; width: 44px; height: 44px; border-radius: 50%; background-color: rgba(220, 38, 38, 0.25); animation: pulse 2s infinite ease-in-out;"></div>
-          <div style="width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, #1E293B, #0F172A); border: 2.5px solid #FFD700; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 8px rgba(0,0,0,0.35); font-size: 17px; z-index: 10;">
-            🛵
-          </div>
-        </div>
-      `;
+      const isOff = driverLivePosition.isDisabled;
+      const pulseColor = isOff ? 'rgba(100, 116, 139, 0.2)' : 'rgba(220, 38, 38, 0.25)';
+      const borderColor = isOff ? '#94A3B8' : '#FFD700';
+
       const bikeIcon = L.divIcon({
-        html: bikeIconHtml,
+        html: `
+          <div style="position: relative; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;">
+            <div style="position: absolute; width: 44px; height: 44px; border-radius: 50%; background-color: ${pulseColor}; ${!isOff ? 'animation: pulse 2s infinite ease-in-out;' : ''}"></div>
+            <div style="width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, #1E293B, #0F172A); border: 2.5px solid ${borderColor}; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 8px rgba(0,0,0,0.35); font-size: 17px; z-index: 10;">
+              🛵
+            </div>
+          </div>
+        `,
         className: 'custom-bike-marker',
         iconSize: [44, 44],
         iconAnchor: [22, 22],
@@ -234,7 +303,7 @@ export default function DriverTrackingView({
         icon: bikeIcon,
         zIndexOffset: 1000,
       }).bindPopup(`
-        <div style="font-family: system-ui, sans-serif; padding: 4px; min-width: 160px;">
+        <div style="font-family: system-ui, sans-serif; padding: 4px; min-width: 170px;">
           <div style="display: flex; align-items: center; gap: 6px;">
             <span style="font-size: 16px;">🛵</span>
             <b style="font-size: 13px; color: #0F172A;">${currentDriver?.name || 'Repartidor'}</b>
@@ -242,16 +311,15 @@ export default function DriverTrackingView({
           <p style="font-size: 11px; color: #64748B; margin: 4px 0 0 0;">
             ${driverLivePosition.headingLabel}
           </p>
+          ${driverLivePosition.isRealGPS ? '<span style="font-size: 10px; color: #16A34A; font-weight: bold; margin-top: 3px; display: inline-block;">● GPS móvil activo</span>' : ''}
         </div>
       `);
       layerGroup.addLayer(bikeMarker);
       boundsPoints.push([driverLivePosition.lat, driverLivePosition.lng]);
     }
 
-    // 3. Marcadores de las entregas asignadas (con número de parada)
+    // 3. Paradas de entregas
     const routeCoords = [[BRANCH_LOCATION.lat, BRANCH_LOCATION.lng]];
-
-    // Si la moto está fuera de sucursal, la línea pasa primero por la moto
     if (driverLivePosition && !driverLivePosition.isAtBranch) {
       routeCoords.push([driverLivePosition.lat, driverLivePosition.lng]);
     }
@@ -270,13 +338,12 @@ export default function DriverTrackingView({
       const isEnCamino = order.status === 'en_camino';
       const bgColor = isUrgent ? '#BE123C' : isEnCamino ? '#7C3AED' : '#2563EB';
 
-      const orderPinHtml = `
-        <div style="background-color: ${bgColor}; width: 28px; height: 28px; border-radius: 50%; color: #ffffff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 12px; border: 2.5px solid #ffffff; box-shadow: 0 3px 6px rgba(0,0,0,0.25);">
-          ${stopIndex}
-        </div>
-      `;
       const orderIcon = L.divIcon({
-        html: orderPinHtml,
+        html: `
+          <div style="background-color: ${bgColor}; width: 28px; height: 28px; border-radius: 50%; color: #ffffff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 12px; border: 2.5px solid #ffffff; box-shadow: 0 3px 6px rgba(0,0,0,0.25);">
+            ${stopIndex}
+          </div>
+        `,
         className: 'custom-stop-marker',
         iconSize: [28, 28],
         iconAnchor: [14, 14],
@@ -286,23 +353,18 @@ export default function DriverTrackingView({
         <div style="font-family: system-ui, sans-serif; padding: 4px; max-width: 200px;">
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
             <b style="color: ${bgColor}; font-size: 13px;">Parada #${stopIndex} (${order.id})</b>
-            <span style="font-size: 10px; font-weight: 700; text-transform: uppercase;">$${order.pricing?.total || 0}</span>
+            <span style="font-size: 10px; font-weight: 700;">$${order.pricing?.total || 0}</span>
           </div>
           <p style="font-size: 12px; font-weight: 700; color: #1E293B; margin: 4px 0 2px 0;">${client.name}</p>
           <p style="font-size: 11px; color: #64748B; margin: 0;">${client.street} #${client.number || 'S/N'}, Col. ${client.colonia}</p>
-          <p style="font-size: 10px; color: #94A3B8; margin-top: 4px;">Método: ${order.payment?.method || 'Efectivo'}</p>
         </div>
       `);
 
-      orderMarker.on('click', () => {
-        if (onSelectOrder) onSelectOrder(order);
-      });
-
+      orderMarker.on('click', () => onSelectOrder?.(order));
       layerGroup.addLayer(orderMarker);
       stopIndex += 1;
     });
 
-    // 4. Dibujar línea de ruta punteada
     if (routeCoords.length > 1) {
       const polyline = L.polyline(routeCoords, {
         color: '#CC0000',
@@ -313,24 +375,78 @@ export default function DriverTrackingView({
       layerGroup.addLayer(polyline);
     }
 
-    // Recentrar mapa abarcando todos los puntos
     if (boundsPoints.length > 0) {
-      map.fitBounds(boundsPoints, {
-        padding: [50, 50],
-        maxZoom: 15,
-      });
+      map.fitBounds(boundsPoints, { padding: [50, 50], maxZoom: 15 });
     }
   }, [selectedDriverId, driverLivePosition, pendingDeliveries, currentDriver, onSelectOrder]);
 
   return (
     <div className="space-y-4">
+      {/* ALERTA INTERACTIVA: Solicitud de apagado de ubicación para Administrador */}
+      {pendingTurnOffRequests.length > 0 && (
+        <div className="space-y-2">
+          {pendingTurnOffRequests.map((req) => {
+            const driverInfo = driversList.find((d) => String(d.id) === String(req.driverId));
+            const driverName = driverInfo?.name || `Repartidor #${req.driverId}`;
+
+            return (
+              <div
+                key={req.driverId}
+                className="bg-amber-50 border-2 border-amber-300 rounded-xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-3 animate-pulse"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-700">
+                    <ShieldAlert className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-black uppercase text-amber-800 bg-amber-200/60 px-2 py-0.5 rounded">
+                        Solicitud de Apagado de GPS
+                      </span>
+                      <span className="text-xs font-extrabold text-slate-900">
+                        {driverName}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 mt-1">
+                      Motivo: <strong className="text-slate-800">&ldquo;{req.requestPending.reason}&rdquo;</strong>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={resolvingId === req.driverId}
+                    onClick={() => handleResolveRequest(req.driverId, false)}
+                    className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Denegar</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={resolvingId === req.driverId}
+                    onClick={() => handleResolveRequest(req.driverId, true)}
+                    className="px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Aprobar Apagado</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* 1. Selector de Pestañas por Repartidor */}
       <div className="bg-white rounded-xl p-3 shadow-2xs border border-slate-200/80">
         <div className="flex items-center justify-between gap-3 mb-2 px-1">
           <div className="flex items-center gap-2">
             <span className="text-base">🛵</span>
             <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-              Monitoreo GPS en Vivo por Repartidor
+              Ubicación en Tiempo Real por Repartidor
             </span>
           </div>
           <span className="text-xs text-slate-500 font-semibold">
@@ -347,6 +463,9 @@ export default function DriverTrackingView({
                 String(o.assignedTo) === String(driver.id) &&
                 (o.status === 'en_camino' || o.status === 'asignado' || o.status === 'incompleto')
             ).length;
+            const driverGPS = realLocations.find((l) => String(l.driverId) === String(driver.id));
+            const hasPendingRequest = Boolean(driverGPS?.requestPending);
+            const isGpsOff = driverGPS?.isTrackingEnabled === false;
 
             return (
               <button
@@ -359,8 +478,23 @@ export default function DriverTrackingView({
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200/60'
                 }`}
               >
-                <div className={`w-2 h-2 rounded-full ${driverPending > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                <div
+                  className={`w-2 h-2 rounded-full ${
+                    hasPendingRequest
+                      ? 'bg-amber-500 animate-ping'
+                      : isGpsOff
+                      ? 'bg-slate-400'
+                      : driverPending > 0
+                      ? 'bg-emerald-500 animate-pulse'
+                      : 'bg-blue-500'
+                  }`}
+                />
                 <span>{driver.name}</span>
+                {hasPendingRequest && (
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-500 text-white">
+                    Solicitud
+                  </span>
+                )}
                 <span
                   className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold ${
                     isSelected ? 'bg-white/20 text-brand-yellow' : 'bg-slate-200 text-slate-600'
@@ -376,7 +510,7 @@ export default function DriverTrackingView({
 
       {/* 2. Área Principal: Mapa y Panel de Entregas */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Mapa Leaflet Interactivo (ocupa 2 columnas en pantallas grandes) */}
+        {/* Mapa Leaflet Interactivo */}
         <div className="lg:col-span-2 bg-white rounded-xl shadow-2xs border border-slate-200 overflow-hidden flex flex-col h-[520px]">
           {/* Barra de estado sobre el mapa */}
           <div className="px-4 py-2.5 bg-slate-900 text-white flex items-center justify-between text-xs font-semibold shrink-0">
@@ -397,13 +531,13 @@ export default function DriverTrackingView({
           <div className="flex-1 w-full h-full relative">
             <div ref={mapContainerRef} className="w-full h-full z-0" />
 
-            {/* Leyenda flotante en la esquina inferior */}
+            {/* Leyenda flotante */}
             <div className="absolute bottom-3 left-3 z-[400] bg-white/95 backdrop-blur-xs p-2.5 rounded-lg shadow-md border border-slate-200 text-[11px] space-y-1">
               <div className="flex items-center gap-1.5 font-bold text-slate-800">
                 <span>🌮</span> <span>Sucursal Tacos El Tío (Base)</span>
               </div>
               <div className="flex items-center gap-1.5 text-slate-700">
-                <span>🛵</span> <span>Posición GPS del Repartidor</span>
+                <span>🛵</span> <span>GPS del Celular del Chofer</span>
               </div>
               <div className="flex items-center gap-1.5 text-slate-700">
                 <span className="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block" /> <span>Parada asignada</span>
@@ -411,16 +545,12 @@ export default function DriverTrackingView({
               <div className="flex items-center gap-1.5 text-slate-700">
                 <span className="w-2.5 h-2.5 rounded-full bg-purple-600 inline-block" /> <span>En camino</span>
               </div>
-              <div className="flex items-center gap-1.5 text-slate-700">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-600 inline-block" /> <span>Faltante / Urgente</span>
-              </div>
             </div>
           </div>
         </div>
 
-        {/* Panel Lateral: Paradas y Cola de Entregas del Repartidor */}
+        {/* Panel Lateral: Paradas y Estado */}
         <div className="bg-white rounded-xl shadow-2xs border border-slate-200 flex flex-col h-[520px]">
-          {/* Header del panel lateral */}
           <div className="p-3.5 border-b border-slate-200 bg-slate-50 rounded-t-xl shrink-0">
             <div className="flex items-center justify-between mb-1">
               <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
@@ -431,11 +561,10 @@ export default function DriverTrackingView({
               </span>
             </div>
             <p className="text-[11px] text-slate-500">
-              Ordenadas para despacho optimizado desde sucursal.
+              Ubicación transmitida en tiempo real desde el dispositivo móvil.
             </p>
           </div>
 
-          {/* Lista scrollable de paradas */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
             {pendingDeliveries.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center p-6 text-slate-400">
