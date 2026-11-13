@@ -32,6 +32,7 @@ import {
 import { THEME } from '../config/theme';
 import { Header } from '../components/common/Header';
 import { OrderCard } from '../components/orders/OrderCard';
+import { DriverMetricsCard } from '../components/orders/DriverMetricsCard';
 import { OrderDetailModal } from '../components/orders/OrderDetailModal';
 import { orderService } from '../services/orderService';
 import { useAuth } from '../context/AuthContext';
@@ -200,6 +201,9 @@ export const DeliveriesScreen = () => {
     <View style={styles.container}>
       {/* Encabezado Principal */}
       <Header />
+
+      {/* Tarjeta de Métricas del Día para el Repartidor */}
+      <DriverMetricsCard orders={orders} />
 
       {/* Pestañas de Filtro */}
       <View style={styles.tabsContainer}>

@@ -1,8 +1,8 @@
 /**
  * @module OrderCard
- * @description Tarjeta de pedido optimizada para el flujo de trabajo de repartidores.
- *              Incluye accesos directos para llamada al cliente, navegación en mapa,
- *              detalle de cobro (efectivo/transferencia) y transición de estados rápida.
+ * @description Tarjeta de pedido compacta y limpia optimizada para repartidores en ruta.
+ *              Prioriza la legibilidad rápida: Folio, Estado, Monto, Cliente, Dirección y Acciones inmediatas.
+ *              Reduce la sobrecarga visual moviendo los desgloses extensos al modal de detalle.
  */
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, Alert } from 'react-native';
@@ -14,10 +14,10 @@ import {
   ChevronRight,
   CreditCard,
   Banknote,
-  Clock,
   Navigation,
   AlertTriangle,
   Lock,
+  Package,
 } from 'lucide-react-native';
 import { THEME } from '../../config/theme';
 import { Badge } from '../common/Badge';
@@ -31,15 +31,49 @@ export const OrderCard = ({
   onReportMissing,
   isUpdating = false,
 }) => {
-  const { id, client, pricing, status, payment, notes, missingReport } = order;
+  const { id, client, pricing, status, payment, items, notes, missingReport } = order;
   const statusCfg = ORDER_STATUS_CONFIG[status] || ORDER_STATUS_CONFIG[ORDER_STATUS.READY];
   const isLocked = status === ORDER_STATUS.DELIVERED || status === ORDER_STATUS.CANCELLED;
+  const isPickup = client?.deliveryType === 'recoger';
 
-  const fullAddress = `Calle ${client?.street || ''} #${client?.number || ''}, Col. ${client?.colonia || ''}`;
+  // Dirección concisa
+  const shortAddress = isPickup
+    ? 'Pasa a recoger en sucursal'
+    : `C. ${client?.street || ''} #${client?.number || 'S/N'}, ${client?.colonia || ''}`;
+
+  // Resumen sintético del contenido del paquete (ej. "3 platillos · 1 bebida")
+  const itemsSummary = React.useMemo(() => {
+    const parts = [];
+    const preparedCount = items?.preparedItems?.length || 0;
+    if (preparedCount > 0) {
+      parts.push(`${preparedCount} platillo${preparedCount > 1 ? 's' : ''}`);
+    }
+
+    let menudoCount = 0;
+    if (Array.isArray(items?.menudo)) {
+      menudoCount = items.menudo.reduce((acc, m) => acc + (m.quantity || 1), 0);
+    }
+    if (menudoCount > 0) {
+      parts.push(`${menudoCount} menudo`);
+    }
+
+    let drinksCount = 0;
+    if (Array.isArray(items?.drinks)) {
+      drinksCount = items.drinks.reduce((acc, d) => acc + (d.quantity || 1), 0);
+    }
+    if (drinksCount > 0) {
+      parts.push(`${drinksCount} bebida${drinksCount > 1 ? 's' : ''}`);
+    }
+
+    if (parts.length === 0) {
+      return 'Ver detalle';
+    }
+    return parts.join(' · ');
+  }, [items]);
 
   const handleCall = () => {
     if (!client?.phone) {
-      Alert.alert('Aviso', 'El cliente no tiene número telefónico registrado');
+      Alert.alert('Aviso', 'El cliente no tiene número registrado');
       return;
     }
     Linking.openURL(`tel:${client.phone}`);
@@ -55,170 +89,160 @@ export const OrderCard = ({
       return;
     }
     const mun = client?.municipio || 'San Nicolás de los Garza';
+    const fullAddress = `Calle ${client?.street || ''} #${client?.number || ''}, Col. ${client?.colonia || ''}`;
     const query = encodeURIComponent(`${fullAddress}, ${mun}, Nuevo León, México`);
     Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
   };
 
   return (
-    <View style={styles.cardContainer}>
-      {/* Encabezado: Folio y Estado */}
+    <TouchableOpacity
+      activeOpacity={0.92}
+      onPress={() => onViewDetail(order)}
+      style={[
+        styles.cardContainer,
+        missingReport && styles.cardContainerAlert,
+      ]}
+    >
+      {/* 1. Encabezado compacto: Folio + Estado + Total en la misma línea */}
       <View style={styles.cardHeader}>
-        <View style={styles.idRow}>
+        <View style={styles.idGroup}>
           <Text style={styles.orderId}>{id}</Text>
           {client?.type === 'empresa' && (
             <View style={styles.companyBadge}>
-              <Text style={styles.companyText}>Empresa</Text>
+              <Text style={styles.companyBadgeText}>Empresa</Text>
             </View>
           )}
         </View>
-        <Badge label={statusCfg.label} colors={statusCfg.colors} />
+
+        <View style={styles.headerRight}>
+          <Badge label={statusCfg.label} colors={statusCfg.colors} />
+          <Text style={styles.headerTotalAmount}>
+            ${pricing?.total || 0}
+          </Text>
+        </View>
       </View>
 
-      {/* Aviso de Faltante si fue reportado */}
+      {/* 2. Banner discreto de Faltante si aplica */}
       {missingReport ? (
         <View style={styles.missingReportBanner}>
-          <AlertTriangle size={15} color="#BE123C" />
-          <View style={styles.missingReportContent}>
-            <Text style={styles.missingReportTitle}>Faltante Reportado (Urgente):</Text>
-            <Text style={styles.missingReportText}>{missingReport.note}</Text>
-          </View>
-        </View>
-      ) : null}
-
-      {/* Datos del Cliente y Teléfono */}
-      <View style={styles.clientSection}>
-        <View style={styles.clientInfo}>
-          <Text style={styles.clientName}>{client?.name || 'Cliente sin nombre'}</Text>
-          {client?.companyName ? (
-            <Text style={styles.companyName}>{client.companyName}</Text>
-          ) : null}
-        </View>
-
-        {client?.phone ? (
-          <TouchableOpacity
-            onPress={handleCall}
-            activeOpacity={0.7}
-            style={styles.callButton}
-            accessibilityLabel="Llamar al cliente"
-          >
-            <Phone size={14} color={THEME.colors.brandRed} />
-            <Text style={styles.callButtonText}>Llamar</Text>
-          </TouchableOpacity>
-        ) : null}
-      </View>
-
-      {/* Dirección con acceso a Mapa o Aviso de Recoger en Sucursal */}
-      {client?.deliveryType === 'recoger' ? (
-        <View style={[styles.addressContainer, { backgroundColor: '#FEF3C7', borderColor: '#FCD34D' }]}>
-          <Navigation size={16} color="#92400E" style={styles.addressIcon} />
-          <View style={styles.addressTextWrapper}>
-            <Text style={[styles.addressText, { color: '#92400E', fontWeight: 'bold' }]}>
-              Pasa a recoger en sucursal
-            </Text>
-            <Text style={[styles.mapHint, { color: '#B45309' }]}>Pedido de mostrador / pickup</Text>
-          </View>
-        </View>
-      ) : (
-        <TouchableOpacity
-          onPress={handleOpenMap}
-          activeOpacity={0.7}
-          style={styles.addressContainer}
-        >
-          <MapPin size={16} color={THEME.colors.brandRed} style={styles.addressIcon} />
-          <View style={styles.addressTextWrapper}>
-            <Text style={styles.addressText} numberOfLines={2}>
-              {fullAddress}
-            </Text>
-            <Text style={styles.mapHint}>Toca para abrir en Google Maps</Text>
-          </View>
-          <Navigation size={14} color={THEME.colors.slate400} />
-        </TouchableOpacity>
-      )}
-
-      {/* Notas de Entrega si existen */}
-      {notes ? (
-        <View style={styles.notesContainer}>
-          <Text style={styles.notesTitle}>Instrucciones:</Text>
-          <Text style={styles.notesText} numberOfLines={2}>
-            {notes}
+          <AlertTriangle size={14} color="#BE123C" />
+          <Text style={styles.missingReportText} numberOfLines={1}>
+            Faltante: {missingReport.note}
           </Text>
         </View>
       ) : null}
 
-      {/* Resumen de Cobro y Método de Pago */}
-      <View style={styles.paymentSection}>
-        <View style={styles.paymentMethodRow}>
-          {payment?.method === PAYMENT_METHODS.EFECTIVO ? (
-            <View>
-              <View style={styles.paymentBadge}>
-                <Banknote size={14} color={THEME.colors.emerald800 || '#047857'} />
-                <Text style={styles.paymentMethodText}>Cobrar en Efectivo</Text>
-              </View>
-              {payment?.change !== null && payment?.change !== undefined ? (
-                <Text style={styles.changeHint}>Llevar cambio de ${payment.change}</Text>
-              ) : null}
-            </View>
-          ) : (
-            <View>
-              <View style={styles.paymentBadgeTransfer}>
-                <CreditCard size={14} color={THEME.colors.slate700} />
-                <Text style={styles.paymentMethodText}>Transferencia</Text>
-              </View>
-              {/* Estatus de la transferencia: solo lectura, sincronizado con la web */}
-              <View style={[
-                styles.transferStatusBadge,
-                payment?.transferStatus === 'aceptada'
-                  ? styles.transferAcceptedBadge
-                  : styles.transferPendingBadge,
-              ]}>
-                <Text style={[
-                  styles.transferStatusBadgeText,
-                  payment?.transferStatus === 'aceptada'
-                    ? styles.transferAcceptedBadgeText
-                    : styles.transferPendingBadgeText,
-                ]}>
-                  {payment?.transferStatus === 'aceptada'
-                    ? 'Transferencia: Aceptada'
-                    : 'Transferencia: Pendiente'}
-                </Text>
-              </View>
-              <Text style={styles.readOnlyNote}>Validado en web (Solo lectura)</Text>
-            </View>
-          )}
+      {/* 3. Cliente y Dirección Compacta */}
+      <View style={styles.clientAddressRow}>
+        <View style={styles.infoCol}>
+          <Text style={styles.clientName} numberOfLines={1}>
+            {client?.name || 'Cliente sin nombre'}
+            {client?.companyName ? ` (${client.companyName})` : ''}
+          </Text>
+
+          <View style={styles.addressInline}>
+            <MapPin
+              size={13}
+              color={isPickup ? '#B45309' : THEME.colors.brandRed}
+              style={{ marginTop: 2, marginRight: 4 }}
+            />
+            <Text
+              style={[
+                styles.addressText,
+                isPickup && { color: '#B45309', fontWeight: '700' },
+              ]}
+              numberOfLines={1}
+            >
+              {shortAddress}
+            </Text>
+          </View>
         </View>
 
-        <View style={styles.totalRow}>
-          <Text style={styles.totalLabel}>Total a Cobrar:</Text>
-          <Text style={styles.totalAmount}>${pricing?.total || 0}</Text>
+        {/* Accesos rápidos de llamada o mapa si no es recoger */}
+        <View style={styles.quickAccessIcons}>
+          {client?.phone ? (
+            <TouchableOpacity
+              onPress={handleCall}
+              activeOpacity={0.7}
+              style={styles.circleIconBtn}
+              accessibilityLabel="Llamar"
+            >
+              <Phone size={14} color={THEME.colors.brandRed} />
+            </TouchableOpacity>
+          ) : null}
+
+          {!isPickup ? (
+            <TouchableOpacity
+              onPress={handleOpenMap}
+              activeOpacity={0.7}
+              style={[styles.circleIconBtn, styles.circleIconBtnSlate]}
+              accessibilityLabel="Abrir mapa"
+            >
+              <Navigation size={14} color={THEME.colors.slate700} />
+            </TouchableOpacity>
+          ) : null}
         </View>
       </View>
 
-      {/* Botones de Acción según el estado actual */}
-      <View style={styles.actionRow}>
-        <TouchableOpacity
-          onPress={() => onViewDetail(order)}
-          activeOpacity={0.7}
-          style={styles.detailButton}
-        >
-          <Text style={styles.detailButtonText}>Ver Pedido</Text>
-          <ChevronRight size={14} color={THEME.colors.slate600} />
-        </TouchableOpacity>
+      {/* 4. Chips informativos de pago y contenido del paquete */}
+      <View style={styles.chipsRow}>
+        {/* Método de pago */}
+        {payment?.method === PAYMENT_METHODS.EFECTIVO ? (
+          <View style={styles.chipCash}>
+            <Banknote size={12} color="#166534" />
+            <Text style={styles.chipCashText}>
+              Efectivo{payment?.change ? ` (Llevar cambio $${payment.change})` : ''}
+            </Text>
+          </View>
+        ) : (
+          <View style={[
+            styles.chipTransfer,
+            payment?.transferStatus === 'aceptada' ? styles.chipTransferOk : styles.chipTransferPending,
+          ]}>
+            <CreditCard
+              size={12}
+              color={payment?.transferStatus === 'aceptada' ? '#166534' : '#92400E'}
+            />
+            <Text style={[
+              styles.chipTransferText,
+              { color: payment?.transferStatus === 'aceptada' ? '#166534' : '#92400E' },
+            ]}>
+              {payment?.transferStatus === 'aceptada' ? 'Transf. Aceptada' : 'Transf. Pendiente'}
+            </Text>
+          </View>
+        )}
+
+        {/* Resumen de paquete */}
+        <View style={styles.chipPackage}>
+          <Package size={12} color={THEME.colors.slate600} />
+          <Text style={styles.chipPackageText} numberOfLines={1}>
+            {itemsSummary}
+          </Text>
+        </View>
+      </View>
+
+      {/* 5. Fila de acciones final */}
+      <View style={styles.footerRow}>
+        <View style={styles.detailLink}>
+          <Text style={styles.detailLinkText}>Ver detalle</Text>
+          <ChevronRight size={13} color={THEME.colors.slate500} />
+        </View>
 
         {isLocked ? (
-          <View style={styles.lockedBadgeContainer}>
+          <View style={styles.lockedBadge}>
             <Lock size={12} color={THEME.colors.slate500} />
             <Text style={styles.lockedBadgeText}>{statusCfg.label}</Text>
           </View>
         ) : (
-          <View style={styles.activeActionsContainer}>
+          <View style={styles.actionButtonsContainer}>
             {onReportMissing && (
               <TouchableOpacity
                 onPress={() => onReportMissing(order)}
                 activeOpacity={0.7}
-                style={styles.reportMissingBtn}
+                style={styles.missingBtn}
               >
                 <AlertTriangle size={12} color="#BE123C" />
-                <Text style={styles.reportMissingBtnText}>Falta Algo</Text>
+                <Text style={styles.missingBtnText}>Falta algo</Text>
               </TouchableOpacity>
             )}
 
@@ -232,7 +256,7 @@ export const OrderCard = ({
                 icon={Truck}
                 isLoading={isUpdating}
                 onPress={() => onStatusChange(id, ORDER_STATUS.ON_THE_WAY)}
-                style={styles.statusActionButton}
+                style={styles.statusActionBtn}
               />
             ) : status === ORDER_STATUS.ON_THE_WAY ? (
               <Button
@@ -242,13 +266,13 @@ export const OrderCard = ({
                 icon={CheckCircle2}
                 isLoading={isUpdating}
                 onPress={() => onStatusChange(id, ORDER_STATUS.DELIVERED)}
-                style={styles.statusActionButton}
+                style={styles.statusActionBtn}
               />
             ) : null}
           </View>
         )}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 
@@ -256,294 +280,242 @@ const styles = StyleSheet.create({
   cardContainer: {
     backgroundColor: THEME.colors.white,
     borderRadius: THEME.borderRadius.lg,
-    padding: THEME.spacing.lg,
-    marginBottom: THEME.spacing.md,
+    padding: 12,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: THEME.colors.slate200,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
     elevation: 2,
+  },
+  cardContainerAlert: {
+    borderColor: '#FDA4AF',
+    backgroundColor: '#FFFBFB',
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: THEME.spacing.sm,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.colors.slate100,
   },
-  idRow: {
+  idGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
   orderId: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '800',
     color: THEME.colors.slate900,
   },
   companyBadge: {
     backgroundColor: THEME.colors.slate100,
     paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingVertical: 1,
     borderRadius: THEME.borderRadius.sm,
   },
-  companyText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: THEME.colors.slate600,
-  },
-  clientSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
-  },
-  clientInfo: {
-    flex: 1,
-    marginRight: 8,
-  },
-  clientName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: THEME.colors.slate900,
-  },
-  companyName: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: THEME.colors.slate500,
-    marginTop: 1,
-  },
-  callButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: THEME.colors.brandRedLight,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: THEME.borderRadius.sm,
-    borderWidth: 1,
-    borderColor: 'rgba(204, 0, 0, 0.2)',
-  },
-  callButtonText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: THEME.colors.brandRed,
-  },
-  addressContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: THEME.colors.slate50,
-    padding: 10,
-    borderRadius: THEME.borderRadius.md,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: THEME.colors.slate200,
-  },
-  addressIcon: {
-    marginRight: 8,
-    marginTop: 2,
-    alignSelf: 'flex-start',
-  },
-  addressTextWrapper: {
-    flex: 1,
-    marginRight: 6,
-  },
-  addressText: {
-    fontSize: 12,
-    color: THEME.colors.slate800,
-    fontWeight: '600',
-    lineHeight: 16,
-  },
-  mapHint: {
-    fontSize: 10,
-    color: THEME.colors.slate400,
-    marginTop: 2,
-  },
-  notesContainer: {
-    backgroundColor: THEME.colors.brandYellowLight,
-    padding: 8,
-    borderRadius: THEME.borderRadius.sm,
-    marginTop: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: THEME.colors.brandYellow,
-  },
-  notesTitle: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#854D0E',
-    textTransform: 'uppercase',
-  },
-  notesText: {
-    fontSize: 11,
-    color: '#713F12',
-    fontWeight: '500',
-    marginTop: 2,
-  },
-  paymentSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: THEME.colors.slate100,
-    marginTop: 10,
-    paddingTop: 10,
-  },
-  paymentMethodRow: {
-    flex: 1,
-  },
-  paymentBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  paymentBadgeTransfer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  paymentMethodText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: THEME.colors.slate800,
-  },
-  changeHint: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: THEME.colors.emerald800 || '#047857',
-    marginTop: 2,
-  },
-  totalRow: {
-    alignItems: 'flex-end',
-  },
-  totalLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: THEME.colors.slate500,
-    textTransform: 'uppercase',
-  },
-  totalAmount: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: THEME.colors.brandRed,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 12,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: THEME.colors.slate100,
-  },
-  detailButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-  },
-  detailButtonText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: THEME.colors.slate600,
-  },
-  statusActionButton: {
-    minWidth: 120,
-  },
-  missingReportBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#FFE4E6',
-    borderWidth: 1,
-    borderColor: '#FDA4AF',
-    borderRadius: THEME.borderRadius.md,
-    padding: 8,
-    marginTop: 8,
-  },
-  missingReportContent: {
-    flex: 1,
-    marginLeft: 6,
-  },
-  missingReportTitle: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#9F1239',
-    textTransform: 'uppercase',
-  },
-  missingReportText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#881337',
-    marginTop: 1,
-  },
-  transferStatusBadge: {
-    marginTop: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: THEME.borderRadius.sm,
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-  },
-  transferAcceptedBadge: {
-    backgroundColor: '#DCFCE7',
-    borderColor: '#86EFAC',
-  },
-  transferPendingBadge: {
-    backgroundColor: '#FEF3C7',
-    borderColor: '#FCD34D',
-  },
-  transferStatusBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  transferAcceptedBadgeText: {
-    color: '#166534',
-  },
-  transferPendingBadgeText: {
-    color: '#92400E',
-  },
-  readOnlyNote: {
+  companyBadgeText: {
     fontSize: 9,
-    color: THEME.colors.slate400,
-    marginTop: 2,
-    fontStyle: 'italic',
-  },
-  lockedBadgeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: THEME.colors.slate100,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: THEME.borderRadius.sm,
-    borderWidth: 1,
-    borderColor: THEME.colors.slate200,
-  },
-  lockedBadgeText: {
-    fontSize: 11,
     fontWeight: '700',
-    color: THEME.colors.slate500,
+    color: THEME.colors.slate600,
   },
-  activeActionsContainer: {
+  headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  reportMissingBtn: {
+  headerTotalAmount: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: THEME.colors.brandRed,
+  },
+  missingReportBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#FFE4E6',
+    borderWidth: 1,
+    borderColor: '#FDA4AF',
+    borderRadius: THEME.borderRadius.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginTop: 6,
+  },
+  missingReportText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#881337',
+    flex: 1,
+  },
+  clientAddressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 8,
+  },
+  infoCol: {
+    flex: 1,
+    marginRight: 8,
+  },
+  clientName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: THEME.colors.slate900,
+    lineHeight: 18,
+  },
+  addressInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  addressText: {
+    fontSize: 11,
+    color: THEME.colors.slate600,
+    fontWeight: '500',
+    flex: 1,
+  },
+  quickAccessIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  circleIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: THEME.borderRadius.full,
+    backgroundColor: THEME.colors.brandRedLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(204, 0, 0, 0.2)',
+  },
+  circleIconBtnSlate: {
+    backgroundColor: THEME.colors.slate100,
+    borderColor: THEME.colors.slate200,
+  },
+  chipsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+    paddingTop: 6,
+  },
+  chipCash: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: THEME.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  chipCashText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#166534',
+  },
+  chipTransfer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: THEME.borderRadius.sm,
+    borderWidth: 1,
+  },
+  chipTransferOk: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#86EFAC',
+  },
+  chipTransferPending: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#FCD34D',
+  },
+  chipTransferText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  chipPackage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: THEME.colors.slate100,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: THEME.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: THEME.colors.slate200,
+    maxWidth: '55%',
+  },
+  chipPackageText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: THEME.colors.slate700,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: THEME.colors.slate100,
+  },
+  detailLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: 4,
+  },
+  detailLinkText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: THEME.colors.slate500,
+  },
+  lockedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: THEME.colors.slate100,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: THEME.borderRadius.sm,
+  },
+  lockedBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: THEME.colors.slate500,
+  },
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  missingBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
     backgroundColor: '#FFF1F2',
     borderWidth: 1,
     borderColor: '#FDA4AF',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 5,
     borderRadius: THEME.borderRadius.sm,
   },
-  reportMissingBtnText: {
-    fontSize: 11,
+  missingBtnText: {
+    fontSize: 10,
     fontWeight: '700',
     color: '#BE123C',
+  },
+  statusActionBtn: {
+    minWidth: 105,
+    paddingVertical: 6,
   },
 });
