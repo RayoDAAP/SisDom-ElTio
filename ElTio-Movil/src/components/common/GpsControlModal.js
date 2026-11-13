@@ -23,8 +23,8 @@ import {
   Send,
   Radio,
 } from 'lucide-react-native';
-import { THEME } from '../config/theme';
-import { locationService } from '../services/locationService';
+import { THEME } from '../../config/theme';
+import { locationService } from '../../services/locationService';
 
 export const GpsControlModal = ({
   visible,
